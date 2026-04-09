@@ -1,0 +1,26 @@
+{
+  "character": {
+    "id": "faf70588-0cae-4cd1-8609-2032cecf4ece",
+    "name": "Character spritesheet, 2D side-view, 16-bit pixel art, young librarian, walking animation, transparent background",
+    "prompt": "Character spritesheet, 2D side-view, 16-bit pixel art, young librarian, walking animation, transparent background",
+    "size": {
+      "width": 68,
+      "height": 68
+    },
+    "template_id": "mannequin",
+    "directions": 4,
+    "view": "low top-down",
+    "created_at": "2026-04-07T18:03:30.453466+00:00"
+  },
+  "frames": {
+    "rotations": {
+      "south": "rotations/south.png",
+      "west": "rotations/west.png",
+      "east": "rotations/east.png",
+      "north": "rotations/north.png"
+    },
+    "animations": {}
+  },
+  "export_version": "2.0",
+  "export_date": "2026-04-08T22:35:00.576361"
+}

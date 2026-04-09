@@ -1,0 +1,2918 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ecos do Brasil — O Guardião da Memória</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #0a0a0f; display: flex; justify-content: center; align-items: center; min-height: 100vh; overflow: hidden; }
+  #game-container { position: relative; }
+  canvas { display: block; image-rendering: pixelated; image-rendering: crisp-edges; }
+</style>
+</head>
+<body>
+<div id="game-container"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/phaser/3.60.0/phaser.min.js"></script>
+<script>
+'use strict';
+// ============================================================
+// ECOS DO BRASIL — O Guardião da Memória  v2.0
+// Engine: Phaser 3.60 | Sprites reais | RioScene completa
+// Save/Load localStorage | Sistema de Diário (TAB)
+// ============================================================
+
+const SCALE = 3;
+const TW = 16;
+const TH = 16;
+const GAME_W = 320;
+const GAME_H = 200;
+
+const C = {
+  black:   0x0a0a0f, darkBg: 0x1a1228, purple: 0x3C3489, purpleL: 0x7F77DD,
+  gold:    0xEF9F27, goldD:  0x8B6914, white:  0xF5F0E8, fog:    0x8888aa,
+  fogL:    0xaaaacc, green:  0x2d6e3a, greenL: 0x4a9c5a, stone:  0x6e6558,
+  stoneL:  0x9e9080, bark:   0x5c3d1e, skin:   0xd4a574, red:    0xc0392b,
+  teal:    0x1D9E75, amber:  0xf0a500,
+};
+
+const TILE = {
+  EMPTY:0, FLOOR:1, WALL:2, STONE_F:3, STONE_W:4,
+  GRASS:5, DOOR:6, SHELF:7, DESK:8, BOX:9,
+  WATER:10, COLONIAL:11, COBBLE:12,
+};
+
+// ════════════════════════════════════════════════════════════
+// SAVE SYSTEM
+// ════════════════════════════════════════════════════════════
+const Save = {
+  KEY: 'ecos_brasil_save',
+  load() {
+    try {
+      const d = localStorage.getItem(this.KEY);
+      return d ? JSON.parse(d) : null;
+    } catch(e) { return null; }
+  },
+  save(data) {
+    try { localStorage.setItem(this.KEY, JSON.stringify(data)); } catch(e) {}
+  },
+  clear() { try { localStorage.removeItem(this.KEY); } catch(e) {} },
+  hasSave() { return !!this.load(); }
+};
+
+// ════════════════════════════════════════════════════════════
+// INVENTORY
+// ════════════════════════════════════════════════════════════
+class Inventory {
+  constructor(data) {
+    this.items = (data && data.items) || [];
+    this.fragments = (data && data.fragments) || 0;
+    this.diaryEntries = (data && data.diaryEntries) || [];
+    this.completedScenes = (data && data.completedScenes) || [];
+  }
+  addItem(item) { if (!this.hasItem(item.id)) this.items.push(item); }
+  hasItem(id) { return this.items.some(i => i.id === id); }
+  addFragment() { this.fragments++; }
+  addDiaryEntry(entry) { this.diaryEntries.push({ text: entry, time: Date.now() }); }
+  completeScene(name) { if (!this.completedScenes.includes(name)) this.completedScenes.push(name); }
+  isComplete(name) { return this.completedScenes.includes(name); }
+  toJSON() {
+    return { items: this.items, fragments: this.fragments,
+             diaryEntries: this.diaryEntries, completedScenes: this.completedScenes };
+  }
+}
+
+// ════════════════════════════════════════════════════════════
+// UTILITY
+// ════════════════════════════════════════════════════════════
+function makeTexture(scene, key, w, h, drawFn) {
+  if (scene.textures.exists(key)) return;
+  const g = scene.make.graphics({ x: 0, y: 0, add: false });
+  drawFn(g);
+  g.generateTexture(key, w, h);
+  g.destroy();
+}
+
+function px(g, color, x, y, w=1, h=1) {
+  g.fillStyle(color, 1);
+  g.fillRect(x, y, w, h);
+}
+
+// ════════════════════════════════════════════════════════════
+// ASSET GENERATOR — sprites programáticos de alta fidelidade
+// ════════════════════════════════════════════════════════════
+class AssetGen {
+  static createAll(scene) {
+    AssetGen.createTiles(scene);
+    AssetGen.createPlayerSprite(scene);
+    AssetGen.createNPCSprites(scene);
+    AssetGen.createClio(scene);
+    AssetGen.createItems(scene);
+    AssetGen.createUI(scene);
+    AssetGen.createEnvironment(scene);
+  }
+
+  // ── Tiles melhorados ─────────────────────────────────────
+  static createTiles(scene) {
+    // Piso de madeira — tábuas com variação e grão
+    makeTexture(scene, 'tile_floor', 16, 16, g => {
+      px(g, 0x6b4c2a, 0, 0, 16, 16);
+      // tábuas horizontais
+      px(g, 0x7a5c38, 0, 0, 16, 5);
+      px(g, 0x6e5230, 0, 5, 16, 1); // junta
+      px(g, 0x7e6040, 0, 6, 16, 5);
+      px(g, 0x6e5230, 0, 11, 16, 1);
+      px(g, 0x7a5c38, 0, 12, 16, 4);
+      // grão da madeira
+      px(g, 0x8a6a48, 2, 1, 5, 3);
+      px(g, 0x8a6a48, 10, 7, 4, 3);
+      px(g, 0x5c4020, 7, 2, 2, 3);
+      px(g, 0x906a40, 3, 13, 6, 2);
+    });
+
+    // Parede — tijolos com argamassa
+    makeTexture(scene, 'tile_wall', 16, 16, g => {
+      px(g, 0x3a2a1a, 0, 0, 16, 16); // argamassa
+      // tijolos linha 1
+      px(g, 0x5a3e28, 1, 1, 6, 3);
+      px(g, 0x4e3420, 8, 1, 7, 3);
+      // tijolos linha 2
+      px(g, 0x4a3420, 1, 5, 3, 3);
+      px(g, 0x5a3e28, 5, 5, 6, 3);
+      px(g, 0x4e3420, 12, 5, 3, 3);
+      // tijolos linha 3
+      px(g, 0x5a3e28, 1, 9, 7, 3);
+      px(g, 0x4a3420, 9, 9, 6, 3);
+      // tijolos linha 4
+      px(g, 0x4e3420, 1, 13, 4, 3);
+      px(g, 0x5a3e28, 6, 13, 5, 3);
+      px(g, 0x4a3420, 12, 13, 3, 3);
+      // highlight topo
+      px(g, 0x6a4e38, 1, 1, 6, 1);
+      px(g, 0x6a4e38, 8, 1, 7, 1);
+    });
+
+    // Paralelepípedo colonial
+    makeTexture(scene, 'tile_cobble', 16, 16, g => {
+      px(g, 0x6a5a48, 0, 0, 16, 16);
+      px(g, 0x7a6a58, 1, 1, 7, 7);
+      px(g, 0x706050, 9, 1, 6, 7);
+      px(g, 0x746454, 1, 9, 6, 6);
+      px(g, 0x7a6a58, 8, 9, 7, 6);
+      // juntas
+      px(g, 0x504038, 0, 8, 16, 1);
+      px(g, 0x504038, 8, 0, 1, 8);
+      // highlight
+      px(g, 0x8a7a68, 1, 1, 7, 1);
+      px(g, 0x8a7a68, 9, 1, 6, 1);
+      px(g, 0x8a7a68, 1, 1, 1, 7);
+    });
+
+    // Parede colonial — reboco amarelado
+    makeTexture(scene, 'tile_colonial', 16, 16, g => {
+      px(g, 0xa89060, 0, 0, 16, 16);
+      // textura de reboco
+      px(g, 0xb8a070, 2, 2, 5, 5);
+      px(g, 0xa08050, 8, 1, 4, 4);
+      px(g, 0xb0906a, 1, 8, 4, 5);
+      px(g, 0xa89060, 7, 7, 5, 5);
+      px(g, 0xb8a070, 11, 10, 4, 4);
+      // bordas de tijolos expostos
+      px(g, 0x806040, 0, 0, 16, 1);
+      px(g, 0x806040, 0, 0, 1, 16);
+      px(g, 0x806040, 15, 0, 1, 16);
+      px(g, 0x806040, 0, 15, 16, 1);
+    });
+
+    // Grama com variação
+    makeTexture(scene, 'tile_grass', 16, 16, g => {
+      px(g, 0x2a6030, 0, 0, 16, 16);
+      px(g, 0x347840, 0, 0, 16, 10);
+      // tufos
+      px(g, 0x3a8848, 1, 5, 2, 5);
+      px(g, 0x459050, 4, 3, 2, 7);
+      px(g, 0x3a8848, 7, 6, 2, 4);
+      px(g, 0x459050, 11, 2, 2, 8);
+      px(g, 0x3a8848, 14, 4, 2, 6);
+      // sombra na base
+      px(g, 0x1e4828, 0, 14, 16, 2);
+      px(g, 0x265830, 0, 12, 16, 2);
+    });
+
+    // Prateleira com livros detalhados
+    makeTexture(scene, 'tile_shelf', 16, 16, g => {
+      px(g, 0x4a2e14, 0, 0, 16, 16);
+      px(g, 0x6a4a28, 0, 4, 16, 1);
+      px(g, 0x6a4a28, 0, 11, 16, 1);
+      // livros variados
+      px(g, 0xb02020, 1, 0, 2, 4);   // vermelho
+      px(g, 0xb03020, 1, 12, 2, 4);
+      px(g, 0x2060b0, 4, 0, 2, 4);   // azul
+      px(g, 0x204080, 4, 12, 2, 4);
+      px(g, 0x208040, 7, 0, 2, 4);   // verde
+      px(g, 0x308050, 7, 12, 2, 4);
+      px(g, 0xa08020, 10, 0, 2, 4);  // dourado
+      px(g, 0xa07010, 10, 12, 2, 4);
+      px(g, 0x802080, 13, 0, 2, 4);  // roxo
+      px(g, 0x601860, 13, 12, 2, 4);
+      // lombadas (highlight)
+      px(g, 0xd04040, 1, 0, 1, 4);
+      px(g, 0x4080d0, 4, 0, 1, 4);
+      px(g, 0x40a060, 7, 0, 1, 4);
+      px(g, 0xc0a040, 10, 0, 1, 4);
+      px(g, 0xa040a0, 13, 0, 1, 4);
+    });
+
+    // Caixa/caixote
+    makeTexture(scene, 'tile_box', 16, 16, g => {
+      px(g, 0x6e5010, 0, 0, 16, 16);
+      px(g, 0xa07828, 1, 1, 14, 14);
+      px(g, 0x6e5010, 7, 1, 2, 14); // viga central
+      px(g, 0x6e5010, 1, 7, 14, 2);
+      px(g, 0xc09848, 2, 2, 4, 4);  // highlight
+      px(g, 0xb08838, 10, 9, 4, 4); // sombra interna
+    });
+
+    // Porta
+    makeTexture(scene, 'tile_door', 16, 16, g => {
+      px(g, 0x4a2e14, 0, 0, 16, 16);
+      px(g, 0x6a4a28, 2, 0, 12, 16);
+      px(g, 0x3a2010, 2, 14, 12, 2); // soleira
+      px(g, 0x5a3e20, 4, 2, 8, 10);  // painel
+      px(g, 0x4a3018, 5, 3, 3, 4);   // painel esq
+      px(g, 0x4a3018, 9, 3, 3, 4);   // painel dir
+      px(g, 0xEF9F27, 12, 8, 2, 2);  // maçaneta dourada
+      px(g, 0xc07010, 12, 9, 2, 1);
+    });
+
+    // Água/fonte
+    makeTexture(scene, 'tile_water', 16, 16, g => {
+      px(g, 0x1040a0, 0, 0, 16, 16);
+      px(g, 0x1858c0, 1, 1, 14, 14);
+      px(g, 0x2070d8, 2, 2, 12, 12);
+      // reflexo animado (estático na textura)
+      px(g, 0x60a0f0, 3, 4, 4, 1);
+      px(g, 0x60a0f0, 9, 7, 3, 1);
+      px(g, 0x4888e0, 5, 10, 5, 1);
+      px(g, 0x80b8ff, 4, 5, 2, 1);
+    });
+
+    // Mesa
+    makeTexture(scene, 'tile_desk', 16, 16, g => {
+      px(g, 0x4a2e14, 0, 6, 16, 10);  // pernas
+      px(g, 0x7a5830, 1, 4, 14, 4);   // tampo lateral
+      px(g, 0x9a7848, 0, 3, 16, 3);   // tampo topo
+      // papel
+      px(g, 0xf0e8c0, 2, 0, 10, 4);
+      px(g, 0xd8d0a0, 3, 1, 8, 2);
+      px(g, 0x606060, 3, 1, 6, 1);   // texto linha
+      px(g, 0x606060, 3, 2, 4, 1);
+      px(g, 0xEF9F27, 11, 0, 3, 2);  // pena/caneta
+    });
+
+    // Hub tile
+    makeTexture(scene, 'tile_hub', 16, 16, g => {
+      px(g, 0x0a0820, 0, 0, 16, 16);
+      px(g, 0x100c28, 3, 3, 10, 10);
+      px(g, 0x14103a, 5, 5, 6, 6);
+      // estrelinhas
+      px(g, 0x7F77DD, 2, 2, 1, 1);
+      px(g, 0x534AB7, 14, 6, 1, 1);
+      px(g, 0x7F77DD, 8, 14, 1, 1);
+    });
+
+    // Tile de chão de pedra para o estoque
+    makeTexture(scene, 'tile_stone_floor', 16, 16, g => {
+      px(g, 0x383028, 0, 0, 16, 16);
+      px(g, 0x48403a, 1, 1, 14, 14);
+      px(g, 0x3c3430, 0, 8, 16, 1);
+      px(g, 0x3c3430, 8, 0, 1, 8);
+      px(g, 0x504848, 1, 1, 7, 7);
+      px(g, 0x484040, 9, 9, 6, 6);
+    });
+  }
+
+  // ── Sprites de personagens de alta qualidade ──────────────
+  // Baseado na spritesheet real do Alex (teal jacket, mochila, cabelo castanho)
+  static createPlayerSprite(scene) {
+    // 5 colunas × 4 linhas = 20 frames, cada 16×24
+    const FW = 16, FH = 24, COLS = 5, ROWS = 4;
+    makeTexture(scene, 'alex', FW * COLS, FH * ROWS, g => {
+      for (let dir = 0; dir < ROWS; dir++) {
+        for (let f = 0; f < COLS; f++) {
+          AssetGen.drawAlex(g, f * FW, dir * FH, dir, f);
+        }
+      }
+    });
+  }
+
+  static drawAlex(g, bx, by, dir, frame) {
+    // Paleta do Alex (baseada na spritesheet real)
+    const HAIR   = 0x4a2010; // castanho escuro
+    const HAIR_H = 0x6a3820; // highlight
+    const SKIN   = 0xc8905a; // pele morena
+    const SKIN_D = 0xa87040;
+    const JACKET = 0x3a7898; // jaqueta teal/azul
+    const JACKET_D = 0x2a5870;
+    const JACKET_L = 0x4a90b0;
+    const BAG    = 0x7a4820; // bolsa marrom
+    const BAG_S  = 0x5a3010;
+    const STRAP  = 0x5a3810; // alça
+    const PANTS  = 0x3a2c1e; // calça marrom escuro
+    const PANTS_H= 0x4a3c2e;
+    const BOOT   = 0x281808; // bota escura
+    const BOOT_H = 0x382818;
+    const WHITE  = 0xf0e8d0; // camisa interna
+
+    // Animação de andar — offset das pernas
+    let legL = 0, legR = 0, armL = 0, armR = 0;
+    if (frame === 1) { legL = -2; legR = 2; armL = 1; armR = -1; }
+    if (frame === 2) { legL = 0; legR = 0; armL = 0; armR = 0; }
+    if (frame === 3) { legL = 2; legR = -2; armL = -1; armR = 1; }
+    if (frame === 4) { legL = -1; legR = 1; armL = 1; armR = -1; }
+
+    if (dir === 0) { // sul — frente
+      // Cabelo
+      px(g, HAIR,   bx+4,  by+0,  8, 4);
+      px(g, HAIR,   bx+3,  by+1,  10,3);
+      px(g, HAIR_H, bx+5,  by+0,  5, 2);
+      px(g, HAIR,   bx+3,  by+4,  2, 2);
+      px(g, HAIR,   bx+11, by+4,  2, 2);
+      // Rosto
+      px(g, SKIN,   bx+4,  by+3,  8, 6);
+      px(g, SKIN_D, bx+4,  by+8,  8, 1);
+      // Olhos
+      px(g, 0x1a1010, bx+5, by+5, 2, 2);
+      px(g, 0x1a1010, bx+9, by+5, 2, 2);
+      px(g, 0xffffff, bx+5, by+5, 1, 1);
+      px(g, 0xffffff, bx+9, by+5, 1, 1);
+      // Nariz/boca
+      px(g, SKIN_D, bx+7, by+7, 2, 1);
+      px(g, 0x804030, bx+6, by+8, 4, 1);
+      // Pescoço
+      px(g, SKIN,   bx+6, by+9, 4, 2);
+      // Jaqueta corpo
+      px(g, JACKET, bx+3, by+10, 10, 8);
+      px(g, JACKET_D, bx+3, by+14, 10, 4);
+      px(g, JACKET_L, bx+4, by+10, 8, 2);
+      // Abertura jaqueta
+      px(g, WHITE,  bx+7, by+10, 2, 8);
+      // Bolsa
+      px(g, STRAP,  bx+4, by+10, 1, 8);
+      px(g, BAG,    bx+2, by+14, 5, 5);
+      px(g, BAG_S,  bx+3, by+15, 3, 3);
+      // Braços
+      px(g, JACKET, bx+1, by+10+armL, 3, 7);
+      px(g, JACKET, bx+12,by+10+armR, 3, 7);
+      px(g, SKIN,   bx+1, by+15+armL, 3, 2);
+      px(g, SKIN,   bx+12,by+15+armR, 3, 2);
+      // Calças
+      px(g, PANTS,  bx+4, by+18, 4, 5);
+      px(g, PANTS,  bx+8, by+18, 4, 5);
+      px(g, PANTS_H,bx+4, by+18, 4, 1);
+      // Botas
+      px(g, BOOT,   bx+3+legL, by+22, 4, 2);
+      px(g, BOOT,   bx+9+legR, by+22, 4, 2);
+      px(g, BOOT_H, bx+3+legL, by+22, 4, 1);
+
+    } else if (dir === 1) { // norte — costas
+      // Cabelo (mais volumoso por trás)
+      px(g, HAIR,   bx+3,  by+0,  10, 5);
+      px(g, HAIR_H, bx+5,  by+0,  6, 3);
+      px(g, HAIR,   bx+2,  by+2,  12, 4);
+      // Rosto (costas — só pescoço)
+      px(g, SKIN,   bx+5,  by+5,  6, 4);
+      // Pescoço
+      px(g, SKIN,   bx+6,  by+9,  4, 2);
+      // Jaqueta costas
+      px(g, JACKET, bx+3,  by+10, 10, 8);
+      px(g, JACKET_D, bx+3, by+14, 10, 4);
+      // Mochila nas costas
+      px(g, BAG,    bx+4,  by+10, 8, 9);
+      px(g, BAG_S,  bx+5,  by+11, 6, 7);
+      px(g, 0xa06030, bx+6, by+12, 4, 5);
+      // Alças da mochila
+      px(g, STRAP,  bx+3,  by+10, 2, 6);
+      px(g, STRAP,  bx+11, by+10, 2, 6);
+      // Braços
+      px(g, JACKET, bx+1,  by+10+armL, 3, 7);
+      px(g, JACKET, bx+12, by+10+armR, 3, 7);
+      // Calças
+      px(g, PANTS,  bx+4,  by+18, 4, 5);
+      px(g, PANTS,  bx+8,  by+18, 4, 5);
+      // Botas
+      px(g, BOOT,   bx+3+legL, by+22, 4, 2);
+      px(g, BOOT,   bx+9+legR, by+22, 4, 2);
+
+    } else if (dir === 2) { // oeste — esquerda
+      // Cabelo lateral
+      px(g, HAIR,   bx+4,  by+0,  8, 5);
+      px(g, HAIR_H, bx+5,  by+0,  5, 3);
+      px(g, HAIR,   bx+2,  by+3,  5, 3);
+      // Rosto perfil
+      px(g, SKIN,   bx+5,  by+3,  7, 7);
+      px(g, SKIN_D, bx+4,  by+6,  3, 3);
+      // Olho
+      px(g, 0x1a1010, bx+6, by+5, 2, 2);
+      px(g, 0xffffff, bx+6, by+5, 1, 1);
+      // Nariz (perfil)
+      px(g, SKIN_D, bx+4, by+7, 2, 1);
+      // Boca
+      px(g, 0x804030, bx+5, by+8, 2, 1);
+      // Pescoço
+      px(g, SKIN,   bx+6, by+9, 4, 2);
+      // Jaqueta
+      px(g, JACKET, bx+4, by+10, 8, 8);
+      px(g, JACKET_D, bx+4, by+14, 8, 4);
+      px(g, WHITE,  bx+10, by+10, 2, 8);
+      // Bolsa visível no lado
+      px(g, BAG,    bx+2, by+13, 5, 6);
+      px(g, BAG_S,  bx+3, by+14, 3, 4);
+      // Braço visível
+      px(g, JACKET, bx+1, by+10+armL, 4, 7);
+      px(g, SKIN,   bx+1, by+15+armL, 4, 2);
+      // Calças
+      px(g, PANTS,  bx+5, by+18, 6, 5);
+      px(g, PANTS_H,bx+5, by+18, 6, 1);
+      // Botas
+      px(g, BOOT,   bx+4+legL, by+22, 5, 2);
+      px(g, BOOT_H, bx+4+legL, by+22, 5, 1);
+
+    } else { // leste — direita (espelho do oeste)
+      // Cabelo
+      px(g, HAIR,   bx+4,  by+0,  8, 5);
+      px(g, HAIR_H, bx+6,  by+0,  5, 3);
+      px(g, HAIR,   bx+9,  by+3,  5, 3);
+      // Rosto perfil
+      px(g, SKIN,   bx+4,  by+3,  7, 7);
+      px(g, SKIN_D, bx+9,  by+6,  3, 3);
+      // Olho
+      px(g, 0x1a1010, bx+8, by+5, 2, 2);
+      px(g, 0xffffff, bx+9, by+5, 1, 1);
+      // Nariz
+      px(g, SKIN_D, bx+10, by+7, 2, 1);
+      // Boca
+      px(g, 0x804030, bx+9, by+8, 2, 1);
+      // Pescoço
+      px(g, SKIN,   bx+6, by+9, 4, 2);
+      // Jaqueta
+      px(g, JACKET, bx+4, by+10, 8, 8);
+      px(g, JACKET_D, bx+4, by+14, 8, 4);
+      px(g, WHITE,  bx+4, by+10, 2, 8);
+      // Bolsa
+      px(g, STRAP,  bx+4, by+10, 1, 8);
+      px(g, BAG,    bx+9, by+13, 5, 6);
+      px(g, BAG_S,  bx+10, by+14, 3, 4);
+      // Braço
+      px(g, JACKET, bx+11, by+10+armR, 4, 7);
+      px(g, SKIN,   bx+11, by+15+armR, 4, 2);
+      // Calças
+      px(g, PANTS,  bx+5, by+18, 6, 5);
+      px(g, PANTS_H,bx+5, by+18, 6, 1);
+      // Botas
+      px(g, BOOT,   bx+7+legR, by+22, 5, 2);
+      px(g, BOOT_H, bx+7+legR, by+22, 5, 1);
+    }
+  }
+
+  // ── NPCs com sprites únicos e detalhados ─────────────────
+  static createNPCSprites(scene) {
+    // Zelador — uniforme cinza, idoso, rodo
+    makeTexture(scene, 'npc_zelador', 16, 24, g => {
+      // Cabelo branco
+      px(g, 0xd0c8b8, 4, 0, 8, 4);
+      px(g, 0xb8b0a0, 3, 2, 10, 3);
+      // Rosto enrugado
+      px(g, 0xc0906a, 4, 4, 8, 6);
+      px(g, 0xa07050, 4, 9, 8, 1);
+      // Olhos pequenos
+      px(g, 0x303030, 5, 6, 2, 2);
+      px(g, 0x303030, 9, 6, 2, 2);
+      // Bigode
+      px(g, 0x909090, 5, 9, 6, 1);
+      // Uniforme cinza
+      px(g, 0x787880, 3, 10, 10, 8);
+      px(g, 0x686870, 3, 14, 10, 4);
+      // Pescoço
+      px(g, 0xc0906a, 6, 9, 4, 2);
+      // Braços
+      px(g, 0x787880, 1, 10, 3, 6);
+      px(g, 0x787880, 12, 10, 3, 6);
+      px(g, 0xc0906a, 1, 15, 3, 2);
+      px(g, 0xc0906a, 12, 15, 3, 2);
+      // Calças cinza escuras
+      px(g, 0x505058, 4, 18, 4, 5);
+      px(g, 0x505058, 8, 18, 4, 5);
+      // Sapatos
+      px(g, 0x282820, 3, 22, 4, 2);
+      px(g, 0x282820, 9, 22, 4, 2);
+      // Rodo (ao lado)
+      px(g, 0x7a5828, 13, 4, 2, 20);
+      px(g, 0xb0b0b0, 10, 22, 6, 2);
+    });
+
+    // Comerciante colonial — chapéu, colete
+    makeTexture(scene, 'npc_comerciante', 16, 24, g => {
+      // Chapéu colonial
+      px(g, 0x3a2810, 2, 0, 12, 2);  // aba
+      px(g, 0x4a3818, 4, 0, 8, 5);   // copa
+      px(g, 0x2a1808, 4, 1, 8, 4);   // sombra interna chapéu
+      // Cabelo
+      px(g, 0x6a4820, 3, 4, 10, 2);
+      // Rosto
+      px(g, 0xd4a070, 4, 5, 8, 6);
+      px(g, 0xb88050, 4, 10, 8, 1);
+      // Olhos
+      px(g, 0x2a1808, 5, 7, 2, 2);
+      px(g, 0x2a1808, 9, 7, 2, 2);
+      // Bigode
+      px(g, 0x503820, 5, 9, 6, 1);
+      // Pescoço + colarinho branco
+      px(g, 0xd4a070, 6, 10, 4, 2);
+      px(g, 0xf0e8d0, 5, 10, 6, 2);
+      // Colete marrom + camisa
+      px(g, 0x6a4a28, 3, 12, 10, 8);
+      px(g, 0x8a6a40, 3, 12, 10, 2);  // highlight topo
+      px(g, 0xf0e8d0, 7, 12, 2, 8);  // camisa interna
+      // Braços
+      px(g, 0x6a4a28, 1, 12, 3, 7);
+      px(g, 0x6a4a28, 12, 12, 3, 7);
+      px(g, 0xd4a070, 1, 17, 3, 2);
+      px(g, 0xd4a070, 12, 17, 3, 2);
+      // Calças escuras
+      px(g, 0x3a2a1a, 4, 20, 4, 4);
+      px(g, 0x3a2a1a, 8, 20, 4, 4);
+      // Botas coloniais
+      px(g, 0x241808, 3, 22, 4, 2);
+      px(g, 0x241808, 9, 22, 4, 2);
+    });
+
+    // Padre — batina preta, colarinho branco
+    makeTexture(scene, 'npc_padre', 16, 24, g => {
+      // Tonsura (careca no topo)
+      px(g, 0xc8906a, 4, 0, 8, 3);
+      px(g, 0x7a5030, 3, 1, 10, 3);  // coroa de cabelo
+      // Rosto sereno
+      px(g, 0xc8906a, 4, 4, 8, 7);
+      px(g, 0xb08050, 4, 10, 8, 1);
+      // Olhos bondosos
+      px(g, 0x3a2818, 5, 6, 2, 2);
+      px(g, 0x3a2818, 9, 6, 2, 2);
+      px(g, 0xffffff, 5, 6, 1, 1);
+      px(g, 0xffffff, 9, 6, 1, 1);
+      // Pescoço + colarinho
+      px(g, 0xc8906a, 6, 10, 4, 2);
+      px(g, 0xf8f4ec, 5, 10, 6, 2);  // colarinho branco
+      // Batina preta
+      px(g, 0x1a1818, 2, 12, 12, 12);
+      px(g, 0x252222, 2, 12, 12, 2);  // highlight topo
+      px(g, 0x1a1818, 2, 12, 2, 10);  // manga esq
+      px(g, 0x1a1818, 12, 12, 2, 10); // manga dir
+      // Cruz dourada
+      px(g, 0xEF9F27, 7, 14, 2, 5);
+      px(g, 0xEF9F27, 6, 16, 4, 2);
+      // Mãos
+      px(g, 0xc8906a, 1, 16, 3, 3);
+      px(g, 0xc8906a, 12, 16, 3, 3);
+      // Batina base
+      px(g, 0x141212, 3, 22, 4, 2);
+      px(g, 0x141212, 9, 22, 4, 2);
+    });
+
+    // Mulher do povo — vestido colorido, cabelo preso
+    makeTexture(scene, 'npc_mulher', 16, 24, g => {
+      // Cabelo preso
+      px(g, 0x2a1808, 3, 0, 10, 5);
+      px(g, 0x3a2810, 4, 0, 8, 3);
+      px(g, 0x1a1008, 12, 2, 3, 8);  // coque lateral
+      // Rosto
+      px(g, 0xb87848, 4, 4, 8, 7);
+      px(g, 0xa06838, 4, 10, 8, 1);
+      // Olhos expressivos
+      px(g, 0x1a1010, 5, 6, 2, 2);
+      px(g, 0x1a1010, 9, 6, 2, 2);
+      px(g, 0xffffff, 5, 6, 1, 1);
+      px(g, 0xffffff, 9, 6, 1, 1);
+      // Brinco
+      px(g, 0xEF9F27, 3, 8, 1, 2);
+      px(g, 0xEF9F27, 12, 8, 1, 2);
+      // Pescoço
+      px(g, 0xb87848, 6, 10, 4, 2);
+      // Blusa colorida (vermelho colonial)
+      px(g, 0xb03820, 3, 12, 10, 6);
+      px(g, 0xd04020, 3, 12, 10, 2);
+      // Saia
+      px(g, 0x6a4820, 2, 18, 12, 6);
+      px(g, 0x8a6030, 2, 18, 12, 1);
+      // Avental
+      px(g, 0xe8dfc0, 4, 19, 8, 5);
+      // Braços
+      px(g, 0xb03820, 1, 12, 3, 6);
+      px(g, 0xb03820, 12, 12, 3, 6);
+      px(g, 0xb87848, 1, 16, 3, 3);
+      px(g, 0xb87848, 12, 16, 3, 3);
+    });
+
+    // Jornalista — Rio 1889, cartola, caderno
+    makeTexture(scene, 'npc_jornalista', 16, 24, g => {
+      // Cartola
+      px(g, 0x1a1818, 2, 0, 12, 1);  // aba
+      px(g, 0x242222, 4, 0, 8, 7);   // copa
+      px(g, 0x302e2e, 5, 1, 6, 5);
+      // Rosto
+      px(g, 0xc8a070, 4, 6, 8, 6);
+      px(g, 0xb08860, 4, 11, 8, 1);
+      // Óculos
+      px(g, 0x3a3020, 4, 8, 3, 2);
+      px(g, 0x3a3020, 9, 8, 3, 2);
+      px(g, 0x3a3020, 7, 8, 2, 1);   // ponte
+      // Bigode fino
+      px(g, 0x503a20, 5, 10, 6, 1);
+      // Pescoço + gravata
+      px(g, 0xc8a070, 6, 11, 4, 2);
+      px(g, 0x1a1818, 7, 11, 2, 2);  // gravata
+      // Casaco preto
+      px(g, 0x1e1c1a, 3, 13, 10, 9);
+      px(g, 0x282624, 3, 13, 10, 2);
+      // Camisa branca no meio
+      px(g, 0xf0e8d0, 7, 13, 2, 9);
+      // Caderno na mão
+      px(g, 0xd4c890, 12, 14, 4, 6);
+      px(g, 0x8a6040, 12, 14, 1, 6);
+      // Braços
+      px(g, 0x1e1c1a, 1, 13, 3, 8);
+      px(g, 0xc8a070, 1, 18, 3, 2);
+      // Calças
+      px(g, 0x1a1818, 4, 22, 4, 2);
+      px(g, 0x1a1818, 8, 22, 4, 2);
+    });
+
+    // Marechal Deodoro — farda, barba branca, vistoso
+    makeTexture(scene, 'npc_deodoro', 16, 24, g => {
+      // Quepe militar
+      px(g, 0x1a2a1a, 2, 0, 12, 2);
+      px(g, 0x243424, 3, 0, 10, 5);
+      px(g, 0xEF9F27, 3, 2, 10, 1);  // faixa dourada
+      // Cabelo branco lateral
+      px(g, 0xd8d0c0, 2, 4, 3, 4);
+      px(g, 0xd8d0c0, 11, 4, 3, 4);
+      // Rosto corado
+      px(g, 0xc89068, 4, 5, 8, 5);
+      // Barba branca volumosa
+      px(g, 0xd8d0c0, 3, 8, 10, 5);
+      px(g, 0xe8e0d0, 4, 9, 8, 4);
+      px(g, 0xd8d0c0, 5, 12, 6, 2);
+      // Olhos sérios
+      px(g, 0x2a1808, 5, 7, 2, 2);
+      px(g, 0x2a1808, 9, 7, 2, 2);
+      // Farda verde militar
+      px(g, 0x2a3a1a, 2, 13, 12, 9);
+      px(g, 0x3a4a2a, 2, 13, 12, 2); // highlight
+      // Medalhas/insígnias douradas
+      px(g, 0xEF9F27, 3, 14, 2, 2);
+      px(g, 0xEF9F27, 6, 14, 2, 2);
+      px(g, 0xEF9F27, 9, 14, 2, 2);
+      px(g, 0xc07010, 3, 15, 2, 1);
+      // Dragonas nos ombros
+      px(g, 0xEF9F27, 2, 13, 2, 3);
+      px(g, 0xEF9F27, 12, 13, 2, 3);
+      // Calças com listra
+      px(g, 0x1a2a1a, 4, 22, 3, 2);
+      px(g, 0x1a2a1a, 9, 22, 3, 2);
+      px(g, 0xEF9F27, 5, 22, 1, 2);
+      px(g, 0xEF9F27, 10, 22, 1, 2);
+    });
+
+    // Dom Pedro II no exílio — velho, cansado, traje nobre
+    makeTexture(scene, 'npc_dompedro', 16, 24, g => {
+      // Cabelo e barba brancos
+      px(g, 0xe8e0d0, 3, 0, 10, 5);
+      px(g, 0xd8d0c0, 2, 2, 12, 4);
+      // Coroa imperial (pequena, discreta)
+      px(g, 0xEF9F27, 4, 0, 8, 2);
+      px(g, 0xc07010, 5, 0, 6, 1);
+      px(g, 0xEF9F27, 4, 0, 1, 2);
+      px(g, 0xEF9F27, 7, 0, 1, 3);
+      px(g, 0xEF9F27, 10, 0, 1, 2);
+      // Rosto nobre mas cansado
+      px(g, 0xc8a070, 4, 5, 8, 5);
+      px(g, 0xb08858, 4, 9, 8, 1);
+      // Barba branca
+      px(g, 0xe8e0d0, 3, 8, 10, 5);
+      // Olhos tristes
+      px(g, 0x4a3820, 5, 7, 2, 2);
+      px(g, 0x4a3820, 9, 7, 2, 2);
+      // Casaco imperial azul
+      px(g, 0x1a2a5a, 2, 13, 12, 9);
+      px(g, 0x2a3a6a, 2, 13, 12, 2);
+      // Faixas douradas imperiais
+      px(g, 0xEF9F27, 2, 14, 2, 1);
+      px(g, 0xEF9F27, 5, 15, 6, 1);
+      px(g, 0xEF9F27, 12, 14, 2, 1);
+      // Ordem imperial (medalha)
+      px(g, 0xEF9F27, 7, 16, 3, 3);
+      px(g, 0x00a0a0, 8, 17, 1, 1);
+      // Mãos
+      px(g, 0xc8a070, 1, 17, 3, 3);
+      px(g, 0xc8a070, 12, 17, 3, 3);
+      // Carta na mão
+      px(g, 0xf0e8c0, 12, 14, 4, 5);
+      // Calças
+      px(g, 0x1a2a5a, 4, 22, 3, 2);
+      px(g, 0x1a2a5a, 9, 22, 3, 2);
+    });
+
+    // Civil do Campo de Santana
+    makeTexture(scene, 'npc_civil', 16, 24, g => {
+      // Chapéu de palha
+      px(g, 0xd4b860, 2, 1, 12, 1);
+      px(g, 0xb89840, 4, 0, 8, 4);
+      // Cabelo
+      px(g, 0x2a1808, 4, 3, 8, 2);
+      // Rosto
+      px(g, 0xb88048, 4, 5, 8, 6);
+      // Olhos
+      px(g, 0x1a1010, 5, 7, 2, 2);
+      px(g, 0x1a1010, 9, 7, 2, 2);
+      // Camisa simples
+      px(g, 0xd0c8a0, 3, 12, 10, 8);
+      px(g, 0xe0d8b0, 3, 12, 10, 2);
+      // Suspensórios
+      px(g, 0x8a6830, 5, 12, 1, 8);
+      px(g, 0x8a6830, 10, 12, 1, 8);
+      // Calças
+      px(g, 0x604030, 4, 20, 4, 4);
+      px(g, 0x604030, 8, 20, 4, 4);
+      // Botas
+      px(g, 0x302018, 3, 22, 4, 2);
+      px(g, 0x302018, 9, 22, 4, 2);
+    });
+
+    // Clio — portrait e sprite melhorados
+    AssetGen.createClio(scene);
+
+    // Portraits para diálogo
+    AssetGen.createPortraits(scene);
+  }
+
+  static createClio(scene) {
+    makeTexture(scene, 'clio', 16, 32, g => {
+      // Cabelo crespo e volumoso
+      px(g, 0x1a0800, 2, 0, 12, 10);
+      px(g, 0x2a1400, 1, 2, 14, 9);
+      px(g, 0x381c08, 3, 3, 10, 7);
+      px(g, 0x1a0800, 2, 8, 2, 4);   // laterais
+      px(g, 0x1a0800, 12, 8, 2, 4);
+      // Rosto
+      px(g, 0xc89068, 4, 8, 8, 7);
+      px(g, 0xb07848, 4, 14, 8, 1);
+      // Olhos com brilho sobrenatural roxo
+      px(g, 0x7F77DD, 5, 10, 2, 2);
+      px(g, 0x7F77DD, 9, 10, 2, 2);
+      px(g, 0xaaaaff, 5, 10, 1, 1);
+      px(g, 0xaaaaff, 9, 10, 1, 1);
+      // Broche dourado
+      px(g, 0xEF9F27, 2, 6, 2, 2);
+      px(g, 0xc07010, 2, 7, 2, 1);
+      // Pescoço
+      px(g, 0xc89068, 6, 14, 4, 2);
+      // Vestido multicultural — roxo com detalhes
+      px(g, 0x534AB7, 2, 16, 12, 16);
+      px(g, 0x7F77DD, 2, 16, 12, 3);  // highlight topo
+      px(g, 0x3C3489, 4, 22, 8, 10);  // sombra base
+      // Detalhes dourados no vestido
+      px(g, 0xEF9F27, 2, 19, 12, 1);
+      px(g, 0xEF9F27, 4, 25, 8, 1);
+      // Livro
+      px(g, 0x4a2e14, 10, 18, 5, 7);
+      px(g, 0xc8b880, 11, 19, 3, 5);
+      px(g, 0x9a8840, 12, 20, 2, 3);
+      // Aura mágica leve
+      px(g, 0x3C3489, 0, 16, 2, 16);
+      px(g, 0x3C3489, 14, 16, 2, 16);
+    });
+
+    makeTexture(scene, 'clio_portrait', 32, 32, g => {
+      px(g, 0x14082a, 0, 0, 32, 32);
+      // Cabelo crespo
+      px(g, 0x1a0800, 4, 2, 24, 14);
+      px(g, 0x2a1400, 2, 4, 28, 12);
+      px(g, 0x381c08, 5, 5, 22, 9);
+      // Rosto
+      px(g, 0xc89068, 8, 10, 16, 14);
+      px(g, 0xb07848, 8, 22, 16, 2);
+      // Olhos luminosos
+      px(g, 0x7F77DD, 9, 13, 4, 4);
+      px(g, 0x7F77DD, 19, 13, 4, 4);
+      px(g, 0xaaaaff, 10, 14, 2, 2);
+      px(g, 0xaaaaff, 20, 14, 2, 2);
+      px(g, 0xffffff, 10, 14, 1, 1);
+      px(g, 0xffffff, 20, 14, 1, 1);
+      // Broche
+      px(g, 0xEF9F27, 6, 8, 3, 3);
+      px(g, 0xffcc44, 7, 9, 1, 1);
+      // Boca
+      px(g, 0x905040, 11, 20, 10, 2);
+      // Borda roxa
+      px(g, 0x3C3489, 0, 0, 32, 2);
+      px(g, 0x3C3489, 0, 30, 32, 2);
+      px(g, 0x3C3489, 0, 0, 2, 32);
+      px(g, 0x3C3489, 30, 0, 2, 32);
+      px(g, 0x7F77DD, 1, 1, 30, 1);
+    });
+  }
+
+  static createPortraits(scene) {
+    // Alex portrait
+    makeTexture(scene, 'alex_portrait', 32, 32, g => {
+      px(g, 0x0a1020, 0, 0, 32, 32);
+      // Cabelo
+      px(g, 0x4a2010, 6, 2, 20, 8);
+      px(g, 0x6a3820, 8, 2, 16, 5);
+      // Rosto
+      px(g, 0xc8905a, 8, 8, 16, 14);
+      px(g, 0xa87040, 8, 20, 16, 2);
+      // Olhos
+      px(g, 0x1a1010, 10, 12, 4, 4);
+      px(g, 0x1a1010, 18, 12, 4, 4);
+      px(g, 0x4a3020, 11, 13, 2, 2);
+      px(g, 0x4a3020, 19, 13, 2, 2);
+      px(g, 0xffffff, 10, 12, 2, 2);
+      px(g, 0xffffff, 18, 12, 2, 2);
+      // Boca
+      px(g, 0x804030, 12, 19, 8, 2);
+      // Jaqueta teal no topo
+      px(g, 0x3a7898, 4, 22, 24, 10);
+      // Borda
+      px(g, 0x3a7898, 0, 0, 32, 2);
+      px(g, 0x3a7898, 0, 30, 32, 2);
+      px(g, 0x3a7898, 0, 0, 2, 32);
+      px(g, 0x3a7898, 30, 0, 2, 32);
+    });
+
+    // Tiradentes portrait
+    makeTexture(scene, 'npc_tiradentes', 32, 32, g => {
+      px(g, 0x0a0a18, 0, 0, 32, 32);
+      // Cabelo longo escuro
+      px(g, 0x1a0a00, 4, 2, 24, 14);
+      px(g, 0x2a1400, 2, 4, 28, 12);
+      // Rosto nobre, magro
+      px(g, 0xd0a878, 8, 8, 16, 16);
+      px(g, 0xb08858, 8, 22, 16, 2);
+      // Olhos sérios
+      px(g, 0x2a1808, 10, 13, 3, 3);
+      px(g, 0x2a1808, 19, 13, 3, 3);
+      px(g, 0xffffff, 10, 13, 1, 1);
+      // Barba
+      px(g, 0x1a0a00, 8, 20, 16, 6);
+      px(g, 0x2a1400, 9, 21, 14, 4);
+      // Colarinho militar branco
+      px(g, 0xf0e8d0, 8, 22, 16, 10);
+      px(g, 0x2a2a6a, 4, 24, 24, 8);  // casaco azul escuro
+      // Borda dourada (mártir)
+      px(g, 0xEF9F27, 0, 0, 32, 2);
+      px(g, 0xEF9F27, 0, 30, 32, 2);
+      px(g, 0xEF9F27, 0, 0, 2, 32);
+      px(g, 0xEF9F27, 30, 0, 2, 32);
+    });
+
+    // Deodoro portrait
+    makeTexture(scene, 'npc_deodoro_portrait', 32, 32, g => {
+      px(g, 0x08100a, 0, 0, 32, 32);
+      // Quepe
+      px(g, 0x1a2a1a, 2, 2, 28, 4);
+      px(g, 0x243424, 4, 2, 24, 8);
+      px(g, 0xEF9F27, 4, 6, 24, 2);
+      // Cabelo/barba brancos
+      px(g, 0xe8e0d0, 4, 8, 24, 16);
+      px(g, 0xd8d0c0, 6, 10, 20, 12);
+      // Rosto
+      px(g, 0xc89068, 8, 10, 16, 10);
+      // Olhos
+      px(g, 0x2a1808, 10, 14, 3, 3);
+      px(g, 0x2a1808, 19, 14, 3, 3);
+      // Farda verde
+      px(g, 0x1a3020, 2, 24, 28, 8);
+      px(g, 0xEF9F27, 2, 24, 28, 2);
+      // Medalhas
+      px(g, 0xEF9F27, 4, 26, 3, 3);
+      px(g, 0xEF9F27, 10, 26, 3, 3);
+      // Borda verde militar
+      px(g, 0x2a4a2a, 0, 0, 32, 2);
+      px(g, 0x2a4a2a, 0, 30, 32, 2);
+      px(g, 0x2a4a2a, 0, 0, 2, 32);
+      px(g, 0x2a4a2a, 30, 0, 2, 32);
+    });
+
+    // Dom Pedro II portrait
+    makeTexture(scene, 'npc_dompedro_portrait', 32, 32, g => {
+      px(g, 0x0a0818, 0, 0, 32, 32);
+      // Barba e cabelo brancos
+      px(g, 0xe8e0d0, 2, 4, 28, 20);
+      px(g, 0xd8d0c0, 4, 6, 24, 16);
+      // Coroa imperial
+      px(g, 0xEF9F27, 4, 0, 24, 5);
+      px(g, 0xc07010, 4, 1, 24, 3);
+      px(g, 0xEF9F27, 4, 0, 2, 6);
+      px(g, 0xEF9F27, 10, 0, 2, 8);
+      px(g, 0xEF9F27, 16, 0, 2, 6);
+      px(g, 0xEF9F27, 22, 0, 2, 8);
+      px(g, 0xEF9F27, 26, 0, 2, 6);
+      // Rosto
+      px(g, 0xc8a070, 8, 8, 16, 14);
+      // Olhos resignados
+      px(g, 0x4a3820, 10, 14, 3, 3);
+      px(g, 0x4a3820, 19, 14, 3, 3);
+      // Casaco imperial azul
+      px(g, 0x1a2a5a, 2, 22, 28, 10);
+      px(g, 0xEF9F27, 2, 22, 28, 2);
+      // Borda imperial
+      px(g, 0xEF9F27, 0, 0, 32, 2);
+      px(g, 0xEF9F27, 0, 30, 32, 2);
+      px(g, 0xEF9F27, 0, 0, 2, 32);
+      px(g, 0xEF9F27, 30, 0, 2, 32);
+    });
+
+    // Zelador portrait
+    makeTexture(scene, 'npc_zelador_portrait', 32, 32, g => {
+      px(g, 0x0a0a0a, 0, 0, 32, 32);
+      px(g, 0xd0c8b8, 6, 2, 20, 8);
+      px(g, 0xb0a898, 4, 4, 24, 8);
+      px(g, 0xc0906a, 8, 8, 16, 14);
+      px(g, 0x909090, 8, 6, 16, 4);  // bigode
+      px(g, 0x303030, 10, 12, 4, 4);
+      px(g, 0x303030, 18, 12, 4, 4);
+      px(g, 0x787880, 4, 22, 24, 10);
+      px(g, 0x686870, 0, 0, 32, 2);
+      px(g, 0x686870, 0, 30, 32, 2);
+      px(g, 0x686870, 0, 0, 2, 32);
+      px(g, 0x686870, 30, 0, 2, 32);
+    });
+  }
+
+  static createItems(scene) {
+    const items = [
+      ['item_carta',    0x2060c0, 0x6090e0],
+      ['item_confissao',0xb02020, 0xe06060],
+      ['item_mapa',     0x208040, 0x50b070],
+      ['item_fragment', 0xEF9F27, 0xffcc44],
+      ['item_jornal',   0xd0c890, 0xf0e8b0],
+      ['item_carta_rio',0x2060c0, 0x60a0e0],
+      ['item_depoimento',0xb04020, 0xe08060],
+    ];
+    items.forEach(([key, base, glow]) => {
+      makeTexture(scene, key, 14, 14, g => {
+        px(g, glow,    1, 1, 12, 12);
+        px(g, base,    2, 2, 10, 10);
+        px(g, 0xffffff,3, 3,  8,  8);
+        if (key === 'item_carta' || key === 'item_carta_rio') {
+          px(g, base, 4, 4, 7, 1);
+          px(g, base, 4, 6, 7, 1);
+          px(g, base, 4, 8, 5, 1);
+          px(g, 0xEF9F27, 9, 3, 2, 2); // lacre
+        } else if (key === 'item_confissao' || key === 'item_depoimento') {
+          px(g, 0x8a1010, 4, 4, 7, 7);
+          px(g, 0xff4444, 5, 5, 5, 5);
+          px(g, 0xffffff, 6, 6, 3, 3);
+        } else if (key === 'item_mapa') {
+          px(g, 0x1a6030, 4, 6, 7, 5);
+          px(g, 0x33aa55, 6, 7, 3, 3);
+          px(g, base, 4, 4, 3, 1);
+          px(g, base, 9, 5, 2, 3);
+        } else if (key === 'item_fragment') {
+          px(g, 0xEF9F27, 7, 3, 1, 8);
+          px(g, 0xEF9F27, 3, 7, 9, 1);
+          px(g, 0xffdd66, 5, 5, 5, 5);
+          px(g, 0xffee88, 6, 6, 3, 3);
+        } else if (key === 'item_jornal') {
+          px(g, 0x606060, 4, 4, 7, 1); // manchete
+          px(g, 0x808080, 4, 6, 6, 1);
+          px(g, 0x909090, 4, 8, 5, 1);
+          px(g, 0xb0a870, 3, 3, 1, 8); // lombada
+        }
+      });
+    });
+
+    // Fragmento Rio — coroa partida
+    makeTexture(scene, 'fragment_rio', 14, 14, g => {
+      px(g, 0xEF9F27, 2, 6, 10, 6);    // base coroa
+      px(g, 0xEF9F27, 2, 2, 2, 6);     // ponta esq
+      px(g, 0xEF9F27, 6, 3, 2, 5);     // ponta meio
+      px(g, 0xEF9F27, 10, 2, 2, 6);    // ponta dir
+      px(g, 0x208040, 3, 7, 3, 4);     // metade verde (Brasil)
+      px(g, 0xffdd44, 8, 7, 3, 4);     // metade dourada
+      px(g, 0x2a1808, 6, 2, 2, 10);    // rachadura
+      px(g, 0xffcc44, 2, 2, 2, 1);
+      px(g, 0xffcc44, 6, 3, 2, 1);
+      px(g, 0xffcc44, 10, 2, 2, 1);
+    });
+
+    // Marcador de névoa
+    makeTexture(scene, 'nevoa_marker', 16, 16, g => {
+      px(g, 0x6666aa, 3, 3, 10, 10);
+      px(g, 0x8888cc, 4, 4, 8, 8);
+      px(g, 0xaaaae8, 6, 6, 4, 4);
+      px(g, 0xccccff, 7, 7, 2, 2);
+    });
+  }
+
+  static createUI(scene) {
+    makeTexture(scene, 'ui_diary', 20, 20, g => {
+      px(g, 0x6e4a10, 0, 0, 20, 20);
+      px(g, 0xEF9F27, 2, 2, 16, 16);
+      px(g, 0xfff8e0, 3, 3, 14, 14);
+      px(g, 0x5c3d1e, 3, 6, 14, 1);
+      px(g, 0x5c3d1e, 3, 9, 14, 1);
+      px(g, 0x5c3d1e, 3, 12, 10, 1);
+      px(g, 0x6e4a10, 2, 0, 2, 20);
+      px(g, 0xEF9F27, 2, 0, 2, 20);
+    });
+    makeTexture(scene, 'ui_vision', 20, 20, g => {
+      px(g, 0x3C3489, 4, 7, 12, 6);
+      px(g, 0x7F77DD, 6, 5, 8, 10);
+      px(g, 0x7F77DD, 4, 7, 12, 6);
+      px(g, 0xffffff, 7, 8, 6, 4);
+      px(g, 0xEF9F27, 8, 9, 4, 2);
+      px(g, 0xffdd44, 9, 9, 2, 2);
+    });
+  }
+
+  static createEnvironment(scene) {
+    // Estátua colonial para Vila Rica
+    makeTexture(scene, 'env_statue', 16, 32, g => {
+      // Pedestal
+      px(g, 0x7a6a5a, 2, 24, 12, 8);
+      px(g, 0x8a7a6a, 3, 24, 10, 2);
+      px(g, 0x6a5a4a, 4, 26, 8, 6);
+      // Figura humana estilizada
+      px(g, 0x9a8a7a, 6, 8, 4, 4);   // cabeça
+      px(g, 0x8a7a6a, 5, 12, 6, 10); // corpo
+      px(g, 0x8a7a6a, 3, 16, 3, 6);  // braço esq estendido
+      px(g, 0x9a8a7a, 10, 14, 3, 4); // braço dir em punho
+      px(g, 0x7a6a5a, 6, 22, 4, 4);  // pernas
+    });
+
+    // Fonte colonial
+    makeTexture(scene, 'env_fountain', 24, 16, g => {
+      // bacia
+      px(g, 0x8a7a6a, 0, 8, 24, 8);
+      px(g, 0x7a6a5a, 0, 8, 24, 2);
+      px(g, 0x9a8a7a, 1, 9, 22, 1);
+      // água
+      px(g, 0x2060a0, 2, 10, 20, 5);
+      px(g, 0x60a0e0, 4, 11, 8, 2);
+      // coluna central
+      px(g, 0x9a8a7a, 10, 2, 4, 8);
+      px(g, 0x8a7a6a, 11, 0, 2, 4);
+    });
+
+    // Igreja colonial background
+    makeTexture(scene, 'env_church_front', 32, 24, g => {
+      // fachada
+      px(g, 0xd4c8a0, 0, 4, 32, 20);
+      px(g, 0xc4b890, 0, 4, 32, 4);
+      // torres
+      px(g, 0xd4c8a0, 0, 0, 8, 8);
+      px(g, 0xd4c8a0, 24, 0, 8, 8);
+      // sino
+      px(g, 0xa08870, 2, 0, 4, 6);
+      px(g, 0xa08870, 26, 0, 4, 6);
+      // janelas
+      px(g, 0x4060a0, 4, 8, 4, 6);
+      px(g, 0x4060a0, 12, 8, 4, 6);
+      px(g, 0x4060a0, 20, 8, 4, 6);
+      px(g, 0x4060a0, 28, 8, 4, 6);
+      // porta
+      px(g, 0x5a3010, 13, 16, 6, 8);
+      px(g, 0x6a4020, 14, 16, 4, 6);
+      // cruz
+      px(g, 0xEF9F27, 15, 4, 2, 5);
+      px(g, 0xEF9F27, 14, 6, 4, 2);
+    });
+  }
+}
+
+// ════════════════════════════════════════════════════════════
+// DIALOGUE MANAGER
+// ════════════════════════════════════════════════════════════
+class DialogueManager {
+  constructor(scene) {
+    this.scene = scene;
+    this.active = false;
+    this.queue = [];
+    this.onComplete = null;
+    this.container = null;
+    this.textObj = null;
+    this.nameObj = null;
+    this.portrait = null;
+    this.current = 0;
+    this.charIndex = 0;
+    this.typeTimer = null;
+  }
+
+  show(lines, onComplete) {
+    this.queue = lines;
+    this.current = 0;
+    this.onComplete = onComplete;
+    this.active = true;
+    this.buildUI();
+    this.showLine();
+  }
+
+  buildUI() {
+    if (this.container) this.container.destroy();
+    const s = this.scene;
+    const bx = 4, by = GAME_H - 62, bw = GAME_W - 8, bh = 58;
+    this.container = s.add.container(0, 0).setDepth(100).setScrollFactor(0);
+
+    const bg = s.add.graphics();
+    bg.fillStyle(0x06050f, 0.96);
+    bg.fillRect(bx, by, bw, bh);
+    bg.lineStyle(1, 0x3C3489, 1);
+    bg.strokeRect(bx, by, bw, bh);
+    bg.lineStyle(1, 0x7F77DD, 0.4);
+    bg.strokeRect(bx+1, by+1, bw-2, bh-2);
+
+    const pbg = s.add.graphics();
+    pbg.fillStyle(0x100c28, 1);
+    pbg.fillRect(bx+2, by+2, 36, 36);
+    pbg.lineStyle(1, 0x534AB7, 0.6);
+    pbg.strokeRect(bx+2, by+2, 36, 36);
+
+    const nameBg = s.add.graphics();
+    nameBg.fillStyle(0x3C3489, 1);
+    nameBg.fillRect(bx+40, by+2, 90, 10);
+    nameBg.lineStyle(1, 0x7F77DD, 0.5);
+    nameBg.strokeRect(bx+40, by+2, 90, 10);
+
+    this.nameObj = s.add.text(bx+42, by+3, '', {
+      fontFamily: 'monospace', fontSize: '7px', color: '#F5F0E8'
+    });
+    this.textObj = s.add.text(bx+40, by+16, '', {
+      fontFamily: 'monospace', fontSize: '7px', color: '#F5F0E8',
+      wordWrap: { width: bw - 48 }, lineSpacing: 2
+    });
+    this.hint = s.add.text(bx+bw-32, by+bh-11, '▶ ESPAÇO', {
+      fontFamily: 'monospace', fontSize: '6px', color: '#7F77DD'
+    });
+    this.portrait = s.add.image(bx+20, by+20, 'clio_portrait').setDisplaySize(32, 32);
+    this.container.add([bg, pbg, nameBg, this.nameObj, this.textObj, this.hint, this.portrait]);
+  }
+
+  showLine() {
+    if (this.current >= this.queue.length) { this.close(); return; }
+    const line = this.queue[this.current];
+    const speaker = line.speaker || 'Clio';
+    const text = line.text || line;
+    this.nameObj.setText(speaker.toUpperCase());
+    this.textObj.setText('');
+    this.charIndex = 0;
+
+    // Portrait selection
+    const portraits = {
+      'Clio': 'clio_portrait',
+      'Alex': 'alex_portrait',
+      'Diário de Alex': 'alex_portrait',
+      'Livro': 'alex_portrait',
+      'Zelador': 'npc_zelador_portrait',
+      'Tiradentes': 'npc_tiradentes',
+      'Deodoro': 'npc_deodoro_portrait',
+      'Dom Pedro II': 'npc_dompedro_portrait',
+    };
+    const portKey = portraits[speaker] || 'clio_portrait';
+    this.portrait.setTexture(portKey).setDisplaySize(32, 32);
+
+    if (this.typeTimer) this.typeTimer.destroy();
+    this.typeTimer = this.scene.time.addEvent({
+      delay: 20, loop: true,
+      callback: () => {
+        this.charIndex++;
+        this.textObj.setText(text.substring(0, this.charIndex));
+        if (this.charIndex >= text.length) this.typeTimer.destroy();
+      }
+    });
+  }
+
+  advance() {
+    if (!this.active) return;
+    const text = this.queue[this.current]?.text || '';
+    if (this.charIndex < text.length) {
+      if (this.typeTimer) this.typeTimer.destroy();
+      this.charIndex = text.length;
+      this.textObj.setText(text);
+    } else {
+      this.current++;
+      this.showLine();
+    }
+  }
+
+  close() {
+    this.active = false;
+    if (this.container) { this.container.destroy(); this.container = null; }
+    if (this.typeTimer) this.typeTimer.destroy();
+    if (this.onComplete) this.onComplete();
+  }
+}
+
+// ════════════════════════════════════════════════════════════
+// PUZZLE MANAGER
+// ════════════════════════════════════════════════════════════
+class PuzzleManager {
+  constructor(scene) {
+    this.scene = scene;
+    this.active = false;
+    this.container = null;
+    this.nodes = [];
+    this.connections = [];
+    this.required = [];
+    this.onSolve = null;
+    this.selectedNode = null;
+  }
+
+  show(config, onSolve) {
+    this.active = true;
+    this.onSolve = onSolve;
+    this.nodes = config.nodes;
+    this.required = config.required;
+    this.connections = [];
+    this.selectedNode = null;
+    this.buildUI(config);
+  }
+
+  buildUI(config) {
+    const s = this.scene;
+    if (this.container) this.container.destroy();
+    this.container = s.add.container(0, 0).setDepth(200).setScrollFactor(0);
+
+    const dim = s.add.graphics();
+    dim.fillStyle(0x000008, 0.92);
+    dim.fillRect(0, 0, GAME_W, GAME_H);
+
+    const title = s.add.text(GAME_W/2, 8, '— CONECTAR OS FATOS —', {
+      fontFamily: 'monospace', fontSize: '8px', color: '#EF9F27'
+    }).setOrigin(0.5);
+
+    const subtitle = s.add.text(GAME_W/2, 18, config.description || '', {
+      fontFamily: 'monospace', fontSize: '6px', color: '#7F77DD',
+      wordWrap: { width: 260 }
+    }).setOrigin(0.5);
+
+    this.lineGfx = s.add.graphics();
+    this.container.add([dim, title, subtitle, this.lineGfx]);
+
+    this.nodeObjects = [];
+    this.nodes.forEach((node, i) => {
+      const nx = node.x, ny = node.y;
+      const isCenter = node.isCenter;
+
+      const bg = s.add.graphics();
+      bg.fillStyle(isCenter ? 0x2a1a4a : 0x0e0a1e, 1);
+      bg.fillRect(nx - node.w/2, ny - node.h/2, node.w, node.h);
+      bg.lineStyle(1.5, isCenter ? 0x7F77DD : 0x534AB7, 1);
+      bg.strokeRect(nx - node.w/2, ny - node.h/2, node.w, node.h);
+
+      const txt = s.add.text(nx, ny, node.label, {
+        fontFamily: 'monospace', fontSize: '5px', color: isCenter ? '#EF9F27' : '#F5F0E8',
+        wordWrap: { width: node.w - 4 }, align: 'center'
+      }).setOrigin(0.5);
+
+      const hitArea = s.add.rectangle(nx, ny, node.w, node.h, 0x000000, 0)
+        .setInteractive()
+        .on('pointerdown', () => this.onNodeClick(i))
+        .on('pointerover', () => {
+          bg.clear();
+          bg.fillStyle(isCenter ? 0x3a2a5a : 0x1e1432, 1);
+          bg.fillRect(nx-node.w/2, ny-node.h/2, node.w, node.h);
+          bg.lineStyle(2, 0xEF9F27, 1);
+          bg.strokeRect(nx-node.w/2, ny-node.h/2, node.w, node.h);
+        })
+        .on('pointerout', () => {
+          if (this.selectedNode !== i) {
+            bg.clear();
+            bg.fillStyle(isCenter ? 0x2a1a4a : 0x0e0a1e, 1);
+            bg.fillRect(nx-node.w/2, ny-node.h/2, node.w, node.h);
+            bg.lineStyle(1.5, isCenter ? 0x7F77DD : 0x534AB7, 1);
+            bg.strokeRect(nx-node.w/2, ny-node.h/2, node.w, node.h);
+          }
+        });
+
+      this.nodeObjects.push({ bg, txt, hitArea, node, index: i });
+      this.container.add([bg, txt, hitArea]);
+    });
+
+    const inst = s.add.text(GAME_W/2, GAME_H-12, 'Clique em dois nós para conectar', {
+      fontFamily: 'monospace', fontSize: '5px', color: '#534AB7'
+    }).setOrigin(0.5);
+
+    this.solveBtn = s.add.text(GAME_W-8, GAME_H-12, '[CONFIRMAR]', {
+      fontFamily: 'monospace', fontSize: '6px', color: '#EF9F27'
+    }).setOrigin(1, 0.5).setInteractive()
+      .on('pointerdown', () => this.checkSolution())
+      .on('pointerover', function() { this.setColor('#ffcc44'); })
+      .on('pointerout', function() { this.setColor('#EF9F27'); });
+
+    this.container.add([inst, this.solveBtn]);
+  }
+
+  onNodeClick(i) {
+    if (this.selectedNode === null) {
+      this.selectedNode = i;
+      const n = this.nodes[i];
+      const obj = this.nodeObjects[i];
+      obj.bg.clear();
+      obj.bg.fillStyle(0x3a2a5a, 1);
+      obj.bg.fillRect(n.x-n.w/2, n.y-n.h/2, n.w, n.h);
+      obj.bg.lineStyle(2, 0xEF9F27, 1);
+      obj.bg.strokeRect(n.x-n.w/2, n.y-n.h/2, n.w, n.h);
+    } else {
+      if (this.selectedNode !== i) {
+        const a = this.selectedNode, b = i;
+        if (!this.connections.find(c => (c[0]===a&&c[1]===b)||(c[0]===b&&c[1]===a))) {
+          this.connections.push([a, b]);
+        }
+        this.redrawLines();
+      }
+      this.selectedNode = null;
+      this.redrawNodes();
+    }
+  }
+
+  redrawNodes() {
+    this.nodeObjects.forEach(obj => {
+      const n = obj.node;
+      obj.bg.clear();
+      obj.bg.fillStyle(n.isCenter ? 0x2a1a4a : 0x0e0a1e, 1);
+      obj.bg.fillRect(n.x-n.w/2, n.y-n.h/2, n.w, n.h);
+      obj.bg.lineStyle(1.5, n.isCenter ? 0x7F77DD : 0x534AB7, 1);
+      obj.bg.strokeRect(n.x-n.w/2, n.y-n.h/2, n.w, n.h);
+    });
+  }
+
+  redrawLines() {
+    this.lineGfx.clear();
+    this.connections.forEach(([a, b]) => {
+      const na = this.nodes[a], nb = this.nodes[b];
+      const isCorrect = this.required.find(r => (r[0]===a&&r[1]===b)||(r[0]===b&&r[1]===a));
+      this.lineGfx.lineStyle(1.5, isCorrect ? 0xEF9F27 : 0x6666cc, 0.9);
+      this.lineGfx.beginPath();
+      this.lineGfx.moveTo(na.x, na.y);
+      this.lineGfx.lineTo(nb.x, nb.y);
+      this.lineGfx.strokePath();
+    });
+  }
+
+  checkSolution() {
+    let correct = 0;
+    this.required.forEach(req => {
+      if (this.connections.find(c => (c[0]===req[0]&&c[1]===req[1])||(c[0]===req[1]&&c[1]===req[0]))) correct++;
+    });
+    if (correct >= this.required.length) {
+      this.close();
+      if (this.onSolve) this.onSolve(true);
+    } else {
+      const msg = this.scene.add.text(GAME_W/2, GAME_H/2-20,
+        `${correct}/${this.required.length} conexões corretas`, {
+        fontFamily:'monospace', fontSize:'7px', color:'#c0392b', backgroundColor:'#000000'
+      }).setOrigin(0.5).setDepth(300).setScrollFactor(0);
+      this.scene.time.delayedCall(1500, () => msg.destroy());
+    }
+  }
+
+  close() {
+    this.active = false;
+    if (this.container) { this.container.destroy(); this.container = null; }
+  }
+}
+
+// ════════════════════════════════════════════════════════════
+// SEQUENCE PUZZLE — para Rio 1889
+// ════════════════════════════════════════════════════════════
+class SequencePuzzle {
+  constructor(scene) {
+    this.scene = scene;
+    this.active = false;
+    this.container = null;
+    this.onSolve = null;
+    this.items = [];
+    this.order = [];
+    this.correct = [];
+    this.selected = null;
+  }
+
+  show(config, onSolve) {
+    this.active = true;
+    this.onSolve = onSolve;
+    this.items = [...config.items];
+    this.correct = config.correctOrder;
+    // embaralha
+    this.order = [...Array(this.items.length).keys()];
+    for (let i = this.order.length-1; i>0; i--) {
+      const j = Math.floor(Math.random()*(i+1));
+      [this.order[i],this.order[j]] = [this.order[j],this.order[i]];
+    }
+    this.selected = null;
+    this.buildUI(config);
+  }
+
+  buildUI(config) {
+    const s = this.scene;
+    if (this.container) this.container.destroy();
+    this.container = s.add.container(0,0).setDepth(200).setScrollFactor(0);
+
+    const dim = s.add.graphics();
+    dim.fillStyle(0x000010, 0.94);
+    dim.fillRect(0,0,GAME_W,GAME_H);
+
+    s.add.text(GAME_W/2, 8, '— ORDENAR OS FATOS —', {
+      fontFamily:'monospace', fontSize:'8px', color:'#2d9e4a'
+    }).setOrigin(0.5);
+
+    s.add.text(GAME_W/2, 18, config.description || 'Coloque os eventos em ordem cronológica', {
+      fontFamily:'monospace', fontSize:'5px', color:'#60cc80', wordWrap:{width:280}
+    }).setOrigin(0.5);
+
+    this.container.add([dim]);
+    this.cardObjs = [];
+    this.redrawCards();
+
+    const confirmBtn = s.add.text(GAME_W-8, GAME_H-10, '[CONFIRMAR ORDEM]', {
+      fontFamily:'monospace', fontSize:'6px', color:'#2d9e4a'
+    }).setOrigin(1,0.5).setInteractive().setScrollFactor(0)
+      .on('pointerdown', () => this.checkSolution())
+      .on('pointerover', function() { this.setColor('#55ee88'); })
+      .on('pointerout', function() { this.setColor('#2d9e4a'); });
+    s.add.text(8, GAME_H-10, 'Clique em dois cards para trocar', {
+      fontFamily:'monospace', fontSize:'5px', color:'#487a58'
+    }).setOrigin(0,0.5).setScrollFactor(0);
+
+    this.container.add([confirmBtn]);
+  }
+
+  redrawCards() {
+    this.cardObjs.forEach(c => c.destroy());
+    this.cardObjs = [];
+    const s = this.scene;
+    const startY = 30;
+    const cardH = 22;
+    const gap = 4;
+
+    this.order.forEach((itemIdx, pos) => {
+      const item = this.items[itemIdx];
+      const y = startY + pos*(cardH+gap);
+      const isSelected = this.selected === pos;
+
+      const bg = s.add.graphics().setDepth(210).setScrollFactor(0);
+      bg.fillStyle(isSelected ? 0x204040 : 0x0c1820, 1);
+      bg.fillRect(8, y, GAME_W-16, cardH);
+      bg.lineStyle(1, isSelected ? 0x55ee88 : 0x206040, 1);
+      bg.strokeRect(8, y, GAME_W-16, cardH);
+
+      const numTxt = s.add.text(16, y+cardH/2, `${pos+1}.`, {
+        fontFamily:'monospace', fontSize:'7px', color: isSelected ? '#55ee88' : '#2d9e4a'
+      }).setOrigin(0,0.5).setDepth(211).setScrollFactor(0);
+
+      const txt = s.add.text(30, y+cardH/2, item, {
+        fontFamily:'monospace', fontSize:'6px', color: isSelected ? '#c0ffd0' : '#90d0a0',
+        wordWrap:{width:GAME_W-50}
+      }).setOrigin(0,0.5).setDepth(211).setScrollFactor(0);
+
+      const hit = s.add.rectangle(GAME_W/2, y+cardH/2, GAME_W-16, cardH, 0,0)
+        .setInteractive().setDepth(212).setScrollFactor(0)
+        .on('pointerdown', () => this.onCardClick(pos));
+
+      this.cardObjs.push(bg, numTxt, txt, hit);
+    });
+  }
+
+  onCardClick(pos) {
+    if (this.selected === null) {
+      this.selected = pos;
+      this.redrawCards();
+    } else if (this.selected === pos) {
+      this.selected = null;
+      this.redrawCards();
+    } else {
+      [this.order[this.selected], this.order[pos]] = [this.order[pos], this.order[this.selected]];
+      this.selected = null;
+      this.redrawCards();
+    }
+  }
+
+  checkSolution() {
+    let correct = 0;
+    for (let i=0; i<this.order.length; i++) {
+      if (this.order[i] === this.correct[i]) correct++;
+    }
+    if (correct === this.order.length) {
+      this.close();
+      if (this.onSolve) this.onSolve(true);
+    } else {
+      const msg = this.scene.add.text(GAME_W/2, GAME_H/2,
+        `${correct}/${this.order.length} corretos. Tente novamente!`, {
+        fontFamily:'monospace', fontSize:'7px', color:'#c0392b', backgroundColor:'#000'
+      }).setOrigin(0.5).setDepth(300).setScrollFactor(0);
+      this.scene.time.delayedCall(1800, ()=>msg.destroy());
+    }
+  }
+
+  close() {
+    this.active = false;
+    this.cardObjs.forEach(c=>c.destroy());
+    if (this.container) { this.container.destroy(); this.container = null; }
+  }
+}
+
+// ════════════════════════════════════════════════════════════
+// DIARY SYSTEM
+// ════════════════════════════════════════════════════════════
+class DiarySystem {
+  constructor(scene, inventory) {
+    this.scene = scene;
+    this.inventory = inventory;
+    this.container = null;
+    this.open = false;
+    this.page = 0;
+  }
+
+  toggle() {
+    if (this.open) { this.close(); }
+    else { this.openDiary(); }
+  }
+
+  openDiary() {
+    this.open = true;
+    this.page = 0;
+    this.buildUI();
+  }
+
+  buildUI() {
+    if (this.container) this.container.destroy();
+    const s = this.scene;
+    this.container = s.add.container(0,0).setDepth(300).setScrollFactor(0);
+
+    const dim = s.add.graphics();
+    dim.fillStyle(0x000000, 0.88);
+    dim.fillRect(0,0,GAME_W,GAME_H);
+
+    // Capa do diário
+    const book = s.add.graphics();
+    book.fillStyle(0x5c3a10, 1);
+    book.fillRect(10, 10, GAME_W-20, GAME_H-20);
+    book.lineStyle(2, 0xEF9F27, 1);
+    book.strokeRect(10, 10, GAME_W-20, GAME_H-20);
+    book.fillStyle(0x7a5020, 1);
+    book.fillRect(14, 14, GAME_W-28, GAME_H-28);
+    // lombada
+    book.fillStyle(0x4a2808, 1);
+    book.fillRect(10, 10, 8, GAME_H-20);
+
+    const title = s.add.text(GAME_W/2, 20, 'DIÁRIO DE ALEX', {
+      fontFamily:'monospace', fontSize:'9px', color:'#EF9F27'
+    }).setOrigin(0.5);
+
+    const fragLine = s.add.text(GAME_W/2, 32, `✦ Fragmentos coletados: ${this.inventory.fragments}/4`, {
+      fontFamily:'monospace', fontSize:'6px', color:'#ffcc44'
+    }).setOrigin(0.5);
+
+    // Seções
+    const sections = [
+      { label: 'MISSÕES', color:'#7F77DD', entries: this.getMissionEntries() },
+      { label: 'ANOTAÇÕES', color:'#90d090', entries: this.inventory.diaryEntries.map(e=>e.text) },
+      { label: 'ITENS', color:'#EF9F27', entries: this.inventory.items.map(i=>i.name||i.id) },
+    ];
+
+    let y = 44;
+    sections.forEach(sec => {
+      const header = s.add.text(20, y, `── ${sec.label} ──`, {
+        fontFamily:'monospace', fontSize:'6px', color: sec.color
+      });
+      y += 10;
+      if (sec.entries.length === 0) {
+        s.add.text(24, y, '(nenhum ainda)', {
+          fontFamily:'monospace', fontSize:'6px', color:'#808080'
+        });
+        y += 10;
+      } else {
+        sec.entries.slice(0,4).forEach(entry => {
+          s.add.text(24, y, `• ${entry}`, {
+            fontFamily:'monospace', fontSize:'6px', color:'#d0c8b0',
+            wordWrap:{width:GAME_W-50}
+          });
+          y += 9;
+        });
+      }
+      y += 4;
+    });
+
+    const closeBtn = s.add.text(GAME_W-18, 18, '✕', {
+      fontFamily:'monospace', fontSize:'9px', color:'#EF9F27'
+    }).setOrigin(0.5).setInteractive()
+      .on('pointerdown', () => this.close())
+      .on('pointerover', function() { this.setColor('#ffcc44'); })
+      .on('pointerout', function() { this.setColor('#EF9F27'); });
+
+    const hint = s.add.text(GAME_W/2, GAME_H-18, '[TAB ou ESC] — Fechar Diário', {
+      fontFamily:'monospace', fontSize:'5px', color:'#534AB7'
+    }).setOrigin(0.5);
+
+    this.container.add([dim, book, title, fragLine, closeBtn, hint]);
+  }
+
+  getMissionEntries() {
+    const all = [
+      'Vila Rica 1789 — Inconfidência Mineira',
+      'Rio de Janeiro 1889 — Proclamação',
+      'São Paulo 1888 — Abolição',
+      'Rio de Janeiro 1904 — Revolta da Vacina',
+    ];
+    return all.map((m, i) => {
+      const done = this.inventory.fragments > i;
+      return (done ? '✓ ' : '○ ') + m;
+    });
+  }
+
+  close() {
+    this.open = false;
+    if (this.container) { this.container.destroy(); this.container = null; }
+  }
+}
+
+// ════════════════════════════════════════════════════════════
+// BASE MAP SCENE
+// ════════════════════════════════════════════════════════════
+class BaseMapScene extends Phaser.Scene {
+  initMap(mapData) {
+    this.mapData = mapData;
+    this.cols = mapData[0].length;
+    this.rows = mapData.length;
+    this.groundLayer = this.add.graphics().setDepth(0);
+
+    for (let row=0; row<this.rows; row++) {
+      for (let col=0; col<this.cols; col++) {
+        const tile = mapData[row][col];
+        const tx = col*TW, ty = row*TH;
+        if (tile !== TILE.EMPTY) this.drawTile(tile, tx, ty);
+      }
+    }
+  }
+
+  drawTile(tile, tx, ty) {
+    let key = 'tile_floor';
+    switch(tile) {
+      case TILE.FLOOR:    key='tile_floor'; break;
+      case TILE.WALL:     key='tile_wall'; break;
+      case TILE.COBBLE:   key='tile_cobble'; break;
+      case TILE.COLONIAL: key='tile_colonial'; break;
+      case TILE.GRASS:    key='tile_grass'; break;
+      case TILE.SHELF:    key='tile_shelf'; break;
+      case TILE.BOX:      key='tile_box'; break;
+      case TILE.DOOR:     key='tile_door'; break;
+      case TILE.WATER:    key='tile_water'; break;
+      case TILE.DESK:     key='tile_desk'; break;
+      case TILE.STONE_F:  key='tile_stone_floor'; break;
+      default: return;
+    }
+    const depth = (tile===TILE.WALL||tile===TILE.COLONIAL||tile===TILE.SHELF||tile===TILE.DESK||tile===TILE.BOX) ? 2 : 0;
+    this.add.image(tx+TW/2, ty+TH/2, key).setDepth(depth);
+  }
+
+  isSolid(wx, wy) {
+    const col = Math.floor(wx/TW), row = Math.floor(wy/TH);
+    if (col<0||row<0||col>=this.cols||row>=this.rows) return true;
+    const t = this.mapData[row][col];
+    return t===TILE.WALL||t===TILE.COLONIAL||t===TILE.SHELF||t===TILE.BOX||t===TILE.DESK||t===TILE.EMPTY;
+  }
+
+  createPlayer(x, y) {
+    this.player = { x, y, dir:0, frame:0, frameTimer:0, frameDelay:0.14, moving:false, speed:70 };
+    // Usar sprite 16×24 com crop
+    this.playerSprite = this.add.image(x, y-4, 'alex').setDepth(10);
+    this.updatePlayerFrame();
+    this.cursors = this.input.keyboard.createCursorKeys();
+    this.wasd = {
+      up:    this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.W),
+      down:  this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.S),
+      left:  this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A),
+      right: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D),
+    };
+    this.tabKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.TAB);
+  }
+
+  updatePlayerFrame() {
+    const p = this.player;
+    const FW=16, FH=24;
+    this.playerSprite.setTexture('alex');
+    this.playerSprite.setCrop(p.frame*FW, p.dir*FH, FW, FH);
+    this.playerSprite.setDisplaySize(FW, FH);
+    this.playerSprite.setPosition(p.x, p.y-4);
+  }
+
+  movePlayer(delta, dialogue, diary) {
+    if ((dialogue&&dialogue.active)||(diary&&diary.open)) return;
+    const p = this.player;
+    const dt = delta/1000;
+    let dx=0, dy=0;
+
+    if (this.cursors.left.isDown  || this.wasd.left.isDown)  { dx=-1; p.dir=2; }
+    else if (this.cursors.right.isDown || this.wasd.right.isDown) { dx=1; p.dir=3; }
+    if (this.cursors.up.isDown    || this.wasd.up.isDown)    { dy=-1; p.dir=1; }
+    else if (this.cursors.down.isDown  || this.wasd.down.isDown)  { dy=1; p.dir=0; }
+
+    if (dx!==0&&dy!==0) { dx*=0.707; dy*=0.707; }
+    p.moving = dx!==0||dy!==0;
+
+    const spd = p.speed*dt;
+    const nx = p.x+dx*spd, ny = p.y+dy*spd;
+    const hw=5, hh=5;
+    const canX = !this.isSolid(nx-hw,p.y-hh)&&!this.isSolid(nx+hw,p.y-hh)&&
+                 !this.isSolid(nx-hw,p.y+hh)&&!this.isSolid(nx+hw,p.y+hh);
+    const canY = !this.isSolid(p.x-hw,ny-hh)&&!this.isSolid(p.x+hw,ny-hh)&&
+                 !this.isSolid(p.x-hw,ny+hh)&&!this.isSolid(p.x+hw,ny+hh);
+    if (canX) p.x=nx;
+    if (canY) p.y=ny;
+
+    if (p.moving) {
+      p.frameTimer+=dt;
+      if (p.frameTimer>=p.frameDelay) { p.frameTimer=0; p.frame=(p.frame+1)%5; }
+    } else { p.frame=0; p.frameTimer=0; }
+
+    this.updatePlayerFrame();
+  }
+
+  addNPCSprite(x, y, key, scale=1) {
+    const sp = this.add.image(x, y-4, key).setDepth(8);
+    sp.setDisplaySize(16*scale, 24*scale);
+    // Patrol tween leve
+    this.tweens.add({ targets:sp, x: x+(Math.random()>0.5?4:-4), duration:Phaser.Math.Between(1200,2200), yoyo:true, repeat:-1, ease:'Sine.easeInOut' });
+    return sp;
+  }
+
+  showExclamation(x, y) {
+    const ex = this.add.text(x, y-20, '!', {
+      fontFamily:'monospace', fontSize:'10px', color:'#EF9F27'
+    }).setOrigin(0.5).setDepth(15);
+    this.tweens.add({ targets:ex, y:y-24, alpha:0.4, duration:600, yoyo:true, repeat:-1 });
+    return ex;
+  }
+
+  createHUDBar(title, color='#EF9F27') {
+    const hudBg = this.add.graphics().setDepth(50).setScrollFactor(0);
+    hudBg.fillStyle(0x04030a, 0.95);
+    hudBg.fillRect(0,0,GAME_W,16);
+    hudBg.lineStyle(1, 0x3C3489, 0.6);
+    hudBg.strokeRect(0,0,GAME_W,16);
+    this.add.text(4,4, title, { fontFamily:'monospace', fontSize:'6px', color }).setDepth(51).setScrollFactor(0);
+    this.interactHint = this.add.text(GAME_W/2, GAME_H-5, '[ESPAÇO/E] Interagir  [TAB] Diário', {
+      fontFamily:'monospace', fontSize:'5px', color:'#534AB7'
+    }).setOrigin(0.5,1).setDepth(51).setScrollFactor(0).setVisible(false);
+  }
+}
+
+// ════════════════════════════════════════════════════════════
+// SCENE: BOOT
+// ════════════════════════════════════════════════════════════
+class BootScene extends Phaser.Scene {
+  constructor() { super('Boot'); }
+  create() {
+    this.cameras.main.setBackgroundColor('#0a0a0f');
+    AssetGen.createAll(this);
+    this.scene.start('Menu');
+  }
+}
+
+// ════════════════════════════════════════════════════════════
+// SCENE: MENU
+// ════════════════════════════════════════════════════════════
+class MenuScene extends Phaser.Scene {
+  constructor() { super('Menu'); }
+
+  create() {
+    const W=GAME_W, H=GAME_H;
+    this.cameras.main.setBackgroundColor('#050310');
+    this.hasSave = Save.hasSave();
+
+    // Estrelas
+    for (let i=0; i<90; i++) {
+      const g=this.add.graphics();
+      const x=Phaser.Math.Between(0,W), y=Phaser.Math.Between(0,H);
+      const r=Math.random()<0.15?1:0;
+      g.fillStyle(0xffffff, Math.random()*0.6+0.15);
+      g.fillRect(x,y,r+1,r+1);
+    }
+
+    // Névoa de fundo
+    for (let i=0; i<3; i++) {
+      const fog=this.add.graphics();
+      fog.fillStyle(0x3C3489, 0.05+i*0.02);
+      fog.fillRect(0, i*70, W, 55);
+      this.tweens.add({ targets:fog, x: i%2===0?5:-5, duration:4000+i*1000, yoyo:true, repeat:-1 });
+    }
+
+    // Título
+    this.add.text(W/2, 35, 'ECOS DO BRASIL', {
+      fontFamily:'monospace', fontSize:'18px', color:'#EF9F27',
+      stroke:'#6B4A00', strokeThickness:3
+    }).setOrigin(0.5);
+
+    this.add.text(W/2, 56, 'O Guardião da Memória', {
+      fontFamily:'monospace', fontSize:'9px', color:'#7F77DD'
+    }).setOrigin(0.5);
+
+    this.add.text(W/2, 72, '~ A Névoa do Esquecimento avança ~', {
+      fontFamily:'monospace', fontSize:'6px', color:'#534AB7'
+    }).setOrigin(0.5);
+
+    // Clio
+    const clioX = W/2, clioY=130;
+    const clioImg = this.add.image(clioX, clioY, 'clio').setScale(2).setDepth(5);
+    this.tweens.add({ targets:clioImg, y:clioY-3, duration:2200, yoyo:true, repeat:-1, ease:'Sine.easeInOut' });
+
+    const aura = this.add.graphics().setDepth(4);
+    aura.lineStyle(1, 0x7F77DD, 0.3);
+    aura.strokeCircle(clioX, clioY, 22);
+    this.tweens.add({ targets:aura, alpha:0.05, duration:1800, yoyo:true, repeat:-1 });
+
+    // Botão Novo Jogo
+    const btnNew = this.add.text(W/2, this.hasSave ? 163 : 168, '▶  NOVA JORNADA', {
+      fontFamily:'monospace', fontSize:'9px', color:'#F5F0E8',
+      backgroundColor:'#3C3489', padding:{x:10,y:5}
+    }).setOrigin(0.5).setInteractive()
+      .on('pointerdown', () => {
+        Save.clear();
+        this.cameras.main.fadeOut(600,0,0,0);
+        this.time.delayedCall(600, () => this.scene.start('Prologue', { inventory: new Inventory() }));
+      })
+      .on('pointerover', function() { this.setBackgroundColor('#534AB7'); })
+      .on('pointerout', function() { this.setBackgroundColor('#3C3489'); });
+    this.tweens.add({ targets:btnNew, alpha:0.75, duration:900, yoyo:true, repeat:-1 });
+
+    // Botão Continuar (se há save)
+    if (this.hasSave) {
+      const saveData = Save.load();
+      const inv = new Inventory(saveData);
+      this.add.text(W/2, 178, `▷  CONTINUAR  (✦ ${inv.fragments}/4)`, {
+        fontFamily:'monospace', fontSize:'8px', color:'#EF9F27',
+        backgroundColor:'#1a1228', padding:{x:8,y:4}
+      }).setOrigin(0.5).setInteractive()
+        .on('pointerdown', () => {
+          this.cameras.main.fadeOut(500,0,0,0);
+          this.time.delayedCall(500, () => this.scene.start('Hub', { inventory: inv }));
+        })
+        .on('pointerover', function() { this.setBackgroundColor('#3C3489'); })
+        .on('pointerout', function() { this.setBackgroundColor('#1a1228'); });
+    }
+
+    this.add.text(W/2, H-10, 'Centro Universitário Católica de SC · 2025', {
+      fontFamily:'monospace', fontSize:'5px', color:'#3C3489'
+    }).setOrigin(0.5);
+
+    this.cameras.main.fadeIn(800);
+  }
+}
+
+// ════════════════════════════════════════════════════════════
+// SCENE: PROLOGUE
+// ════════════════════════════════════════════════════════════
+class PrologueScene extends BaseMapScene {
+  constructor() { super('Prologue'); }
+
+  init(data) {
+    this.inventory = data.inventory || new Inventory();
+    this.currentRoom = 'library';
+    this.bookFound = false;
+  }
+
+  create() {
+    this.cameras.main.setBackgroundColor('#120d0a');
+
+    // Biblioteca — mapa rico
+    const map = [
+      [2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2],
+      [2,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,2],
+      [2,7,7,7,7,1,1,1,1,1,1,1,1,7,7,7,7,7,1,2],
+      [2,7,7,7,7,1,1,1,1,1,1,1,1,7,7,7,7,7,1,2],
+      [2,1,1,1,1,1,8,8,1,1,1,8,8,1,1,1,1,1,1,2],
+      [2,1,1,1,1,1,8,8,1,1,1,8,8,1,1,1,1,1,1,2],
+      [2,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,2],
+      [2,7,7,7,7,1,1,1,1,1,1,1,1,7,7,7,7,7,1,2],
+      [2,7,7,7,7,1,1,1,1,1,1,1,1,7,7,7,7,7,1,2],
+      [2,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,2],
+      [2,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,2],
+      [2,2,2,2,2,2,2,2,2,6,2,2,2,2,2,2,2,2,2,2],
+    ];
+
+    this.storageMap = [
+      [2,2,2,2,2,2,2,2,2,2,2,2,2],
+      [2,3,3,3,3,3,3,3,3,3,3,3,2],
+      [2,3,9,9,3,9,9,3,9,9,3,3,2],
+      [2,3,9,9,3,9,9,3,9,9,3,3,2],
+      [2,3,3,3,3,3,3,3,3,3,3,3,2],
+      [2,3,9,9,3,3,3,3,3,9,9,3,2],
+      [2,3,9,9,3,3,3,3,3,9,9,3,2],
+      [2,3,3,3,3,3,3,3,3,3,3,3,2],
+      [2,3,3,3,9,9,9,9,3,3,3,3,2],
+      [2,3,3,3,9,9,9,9,3,3,3,3,2],
+      [2,2,2,2,2,2,2,2,2,2,2,2,2],
+    ];
+
+    this.initMap(map);
+    this.createPlayer(9*TW+8, 7*TH+8);
+    this.dialogue = new DialogueManager(this);
+    this.diary = new DiarySystem(this, this.inventory);
+
+    // NPCs na biblioteca
+    this.profSprite = this.addNPCSprite(6*TW+8, 5*TH+8, 'npc_comerciante');
+    this.addNPCSprite(13*TW+8, 5*TH+8, 'npc_mulher');
+
+    // Exclamação NPC
+    this.profEx = this.showExclamation(6*TW+8, 5*TH+8);
+
+    // Porta
+    const doorGlow = this.add.graphics().setDepth(6);
+    doorGlow.lineStyle(1.5, 0xEF9F27, 0.7);
+    doorGlow.strokeRect(8*TW+2, 11*TH-4, TW-4, 8);
+    this.tweens.add({ targets:doorGlow, alpha:0.3, duration:1000, yoyo:true, repeat:-1 });
+
+    this.createHUDBar('PRÓLOGO — Biblioteca da Escola');
+
+    // Teclas
+    this.input.keyboard.on('keydown-SPACE', () => {
+      if (this.dialogue.active) { this.dialogue.advance(); return; }
+      if (this.diary.open) { this.diary.close(); return; }
+      this.checkInteraction();
+    });
+    this.input.keyboard.on('keydown-E', () => {
+      if (!this.dialogue.active && !this.diary.open) this.checkInteraction();
+    });
+    this.input.keyboard.on('keydown-TAB', (e) => {
+      e.preventDefault();
+      this.diary.toggle();
+    });
+
+    this.cameras.main.setBounds(0,0,this.cols*TW, this.rows*TH);
+    this.cameras.main.startFollow(this.playerSprite, true, 0.1, 0.1);
+    this.cameras.main.fadeIn(800);
+
+    this.time.delayedCall(500, () => {
+      this.dialogue.show([
+        { speaker:'Alex', text:'Escola de novo... trabalho de história para amanhã. Professora disse: "fonte primária, não Wikipedia".' },
+        { speaker:'Alex', text:'Talvez tenha alguma coisa na biblioteca. Vou olhar.' },
+      ], ()=>{});
+    });
+  }
+
+  checkInteraction() {
+    const p = this.player;
+    if (this.currentRoom === 'library') {
+      if (p.y > 10*TH && p.x > 7*TW && p.x < 10*TW) {
+        this.enterStorage(); return;
+      }
+      if (Phaser.Math.Distance.Between(p.x,p.y, 6*TW+8, 5*TH+8) < 22) {
+        this.profEx.setVisible(false);
+        this.dialogue.show([
+          { speaker:'Professora', text:'Vai lá no fundo, tem um estoque. Talvez ache uns livros mais antigos. Mas não bagunça.' },
+        ], ()=>{});
+        return;
+      }
+    } else if (this.currentRoom === 'storage' && this.pileData) {
+      for (const pile of this.pileData) {
+        if (Phaser.Math.Distance.Between(p.x,p.y, pile.x, pile.y) < 24) {
+          if (!pile.interacted) {
+            pile.interacted = true;
+            this.dialogue.show(pile.lines, () => {
+              if (pile.special) this.foundSpecialBook();
+            });
+          } else if (pile.special) { this.foundSpecialBook(); }
+          return;
+        }
+      }
+      if (Phaser.Math.Distance.Between(p.x,p.y, 10*TW+8, 5*TH+8) < 22) {
+        this.dialogue.show([{ speaker:'Zelador', text:'...' }], ()=>{});
+      }
+    }
+  }
+
+  enterStorage() {
+    if (this.currentRoom==='storage') return;
+    this.currentRoom = 'storage';
+    this.cameras.main.fadeOut(400,0,0,0);
+    this.time.delayedCall(400, () => {
+      this.children.each(c=>c.destroy());
+      this.cameras.main.setBackgroundColor('#080604');
+
+      this.initMap(this.storageMap);
+
+      // Zelador
+      this.zelSprite = this.add.image(10*TW+8, 5*TH+8, 'npc_zelador').setDisplaySize(16,24).setDepth(8);
+      this.tweens.add({ targets:this.zelSprite, x:10*TW+12, duration:1000, yoyo:true, repeat:-1 });
+
+      this.createPlayer(6*TW+8, 8*TH+8);
+      this.dialogue = new DialogueManager(this);
+      this.diary = new DiarySystem(this, this.inventory);
+
+      // Pilhas de caixas
+      this.pileData = [
+        { x:3*TW+8, y:3*TH+8, interacted:false, special:false,
+          lines:[{ speaker:'Alex', text:'Gramática de 1987, bíblia de bolso, ata de reunião de 2003... Nada histórico.' }] },
+        { x:6*TW+8, y:3*TH+8, interacted:false, special:false,
+          lines:[{ speaker:'Alex', text:'Atlas com a União Soviética no mapa. Caderno de aluno esquecido. Nada útil.' }] },
+        { x:9*TW+8, y:3*TH+8, interacted:false, special:true,
+          lines:[{ speaker:'Alex', text:'Esta pilha é mais velha... livros de capa dura, cheirando a tempo. Tem um sem título no fundo...' }] },
+      ];
+
+      this.pileData.forEach((pile, i) => {
+        const sp = this.add.image(pile.x, pile.y, 'tile_box').setDisplaySize(20,20).setDepth(5);
+        if (i===2) {
+          this.tweens.add({ targets:sp, alpha:0.5, duration:1400, yoyo:true, repeat:-1 });
+          this.showExclamation(pile.x, pile.y);
+        }
+        this.add.text(pile.x, pile.y-14, i===2?'?':'📚', {
+          fontFamily:'monospace', fontSize:'7px', color:'#EF9F27'
+        }).setOrigin(0.5).setDepth(6);
+      });
+
+      this.add.text(1*TW+8, 10*TH+4, '← SAIR', {
+        fontFamily:'monospace', fontSize:'5px', color:'#534AB7'
+      }).setOrigin(0.5).setDepth(6);
+
+      this.createHUDBar('ESTOQUE DA BIBLIOTECA');
+      this.input.keyboard.on('keydown-SPACE', () => {
+        if (this.dialogue.active) { this.dialogue.advance(); return; }
+        if (this.diary.open) { this.diary.close(); return; }
+        this.checkInteraction();
+      });
+      this.input.keyboard.on('keydown-E', () => {
+        if (!this.dialogue.active&&!this.diary.open) this.checkInteraction();
+      });
+      this.input.keyboard.on('keydown-TAB', (e) => { e.preventDefault(); this.diary.toggle(); });
+
+      this.cameras.main.setBounds(0,0,this.cols*TW, this.rows*TH);
+      this.cameras.main.startFollow(this.playerSprite, true,0.1,0.1);
+      this.cameras.main.fadeIn(400);
+
+      this.dialogue.show([
+        { speaker:'Alex', text:'Que bagunça... O zelador está passando o rodo sem olhar pra mim.' },
+        { speaker:'Zelador', text:'...' },
+        { speaker:'Alex', text:'Entendimento mútuo. Vou olhar essas pilhas.' },
+      ], ()=>{});
+    });
+  }
+
+  foundSpecialBook() {
+    if (this.bookFound) return;
+    this.bookFound = true;
+    this.dialogue.show([
+      { speaker:'Alex', text:'Este livro... não tem título. Capa de couro escuro. E está quente.' },
+      { speaker:'Alex', text:'Quente como a palma de uma mão. Como algo vivo.' },
+      { speaker:'Alex', text:'As páginas estão em branco... em branco... e aqui: uma frase.' },
+      { speaker:'Livro', text:'"Quem lê isto foi escolhido. O passado precisa de você."' },
+      { speaker:'Alex', text:'As páginas começam a virar sozinhas... mais rápido... a luz piscou...' },
+      { speaker:'Alex', text:'Tentei largar o livro. Não consegui.' },
+    ], () => {
+      this.cameras.main.shake(500,0.01);
+      this.cameras.main.flash(300,100,80,200);
+      this.tweens.add({
+        targets: this.cameras.main, zoom:8, duration:1200, ease:'Power3',
+        onComplete: () => {
+          this.cameras.main.fadeOut(400,10,5,30);
+          this.time.delayedCall(500, () => this.scene.start('Hub', { inventory: this.inventory }));
+        }
+      });
+    });
+  }
+
+  update(time, delta) {
+    this.movePlayer(delta, this.dialogue, this.diary);
+    const p = this.player;
+    let near = false;
+    if (this.currentRoom==='library') { near = p.y>10*TH; }
+    else if (this.pileData) {
+      near = this.pileData.some(pile => Phaser.Math.Distance.Between(p.x,p.y,pile.x,pile.y)<24);
+    }
+    if (this.interactHint) this.interactHint.setVisible(near&&!this.dialogue.active&&!this.diary.open);
+  }
+}
+
+// ════════════════════════════════════════════════════════════
+// SCENE: HUB — Templo da Memória
+// ════════════════════════════════════════════════════════════
+class HubScene extends Phaser.Scene {
+  constructor() { super('Hub'); }
+
+  init(data) {
+    this.inventory = data.inventory || new Inventory();
+    // Auto-save
+    Save.save(this.inventory.toJSON());
+  }
+
+  create() {
+    const W=GAME_W, H=GAME_H;
+    this.cameras.main.setBackgroundColor('#04020e');
+
+    // Estrelas
+    for (let i=0; i<120; i++) {
+      const g=this.add.graphics();
+      const x=Phaser.Math.Between(0,W), y=Phaser.Math.Between(0,H);
+      const r=Math.random()<0.12?1:0;
+      g.fillStyle(0xffffff, Math.random()*0.7+0.1);
+      g.fillRect(x,y,r+1,r+1);
+      if (Math.random()<0.2) {
+        this.tweens.add({ targets:g, alpha:Math.random()*0.3, duration:Phaser.Math.Between(1000,3000), yoyo:true, repeat:-1 });
+      }
+    }
+
+    this.drawBrazilMap();
+
+    this.add.text(W/2, 10, 'TEMPLO DA MEMÓRIA', {
+      fontFamily:'monospace', fontSize:'9px', color:'#EF9F27'
+    }).setOrigin(0.5);
+    this.add.text(W/2, 20, 'Selecione um período para restaurar', {
+      fontFamily:'monospace', fontSize:'6px', color:'#534AB7'
+    }).setOrigin(0.5);
+
+    // Clio
+    const clioImg = this.add.image(36, H/2, 'clio').setScale(1.5).setDepth(10);
+    this.tweens.add({ targets:clioImg, y:H/2-3, duration:2000, yoyo:true, repeat:-1, ease:'Sine.easeInOut' });
+    const aura = this.add.graphics().setDepth(9);
+    aura.lineStyle(1.5, 0x7F77DD, 0.35);
+    aura.strokeCircle(36, H/2, 20);
+    this.tweens.add({ targets:aura, alpha:0.08, duration:1800, yoyo:true, repeat:-1 });
+
+    // Nós de missão
+    this.missionNodes = [
+      { x:128, y:112, label:'Vila Rica\n1789', sub:'Inconfidência Mineira', scene:'VillaRica',
+        unlocked:true, done:this.inventory.isComplete('VillaRica'), color:0xEF9F27 },
+      { x:190, y:132, label:'Rio de Janeiro\n1889', sub:'Proclamação da República', scene:'RioScene',
+        unlocked:this.inventory.fragments>=1, done:this.inventory.isComplete('RioScene'), color:0x2d9e4a },
+      { x:158, y:80, label:'São Paulo\n1888', sub:'Lei Áurea', scene:null,
+        unlocked:false, done:false, color:0x2060c0 },
+      { x:210, y:100, label:'Rio de Janeiro\n1904', sub:'Revolta da Vacina', scene:null,
+        unlocked:false, done:false, color:0xc0392b },
+    ];
+
+    this.missionNodes.forEach(n => this.drawMissionNode(n));
+
+    // Contador de fragmentos
+    this.add.text(W-8, 8, `✦ ${this.inventory.fragments}/4 Fragmentos`, {
+      fontFamily:'monospace', fontSize:'6px', color:'#EF9F27'
+    }).setOrigin(1,0);
+
+    this.dialogue = new DialogueManager(this);
+    this.cameras.main.fadeIn(800);
+
+    this.input.keyboard.on('keydown-SPACE', () => {
+      if (this.dialogue.active) this.dialogue.advance();
+    });
+
+    this.time.delayedCall(600, () => {
+      const isFirstVisit = this.inventory.fragments === 0 && !this.inventory.isComplete('VillaRica');
+      if (isFirstVisit) {
+        this.dialogue.show([
+          { speaker:'Clio', text:'Você foi sugado para dentro do livro... na verdade, o livro era uma porta. Bem-vindo ao Templo da Memória.' },
+          { speaker:'Clio', text:'Este mapa mostra o Brasil. A névoa cinzenta encobre períodos distorcidos pelo Esquecimento.' },
+          { speaker:'Clio', text:'Sua primeira missão: Vila Rica, 1789. A Inconfidência Mineira. Clique no ponto dourado.' },
+        ], ()=>{});
+      } else {
+        this.dialogue.show([
+          { speaker:'Clio', text:`Bem-vindo de volta. Você tem ${this.inventory.fragments} fragmento(s). Continue restaurando a memória do Brasil.` },
+        ], ()=>{});
+      }
+    });
+  }
+
+  drawBrazilMap() {
+    const g = this.add.graphics().setDepth(2);
+    // Silhueta mais fiel do Brasil
+    const pts = [
+      162,34, 172,30, 185,32, 198,36, 210,42, 222,52,
+      230,65, 236,80, 240,98, 239,115, 235,128,
+      228,140, 218,152, 205,162, 192,168, 178,170,
+      163,168, 148,163, 136,154, 124,142, 114,128,
+      108,112, 106,96, 108,80, 114,66, 122,54, 134,44, 148,37
+    ];
+    g.lineStyle(1, 0x3C3489, 0.7);
+    g.fillStyle(0x0a0620, 0.9);
+    g.beginPath();
+    g.moveTo(pts[0], pts[1]);
+    for (let i=2; i<pts.length; i+=2) g.lineTo(pts[i], pts[i+1]);
+    g.closePath();
+    g.fillPath();
+    g.strokePath();
+
+    // Névoa pulsante
+    const fog = this.add.graphics().setDepth(3);
+    fog.fillStyle(0x4444aa, 0.12);
+    fog.fillRect(88, 25, 162, 155);
+    for (let i=0; i<18; i++) {
+      const fp=this.add.graphics().setDepth(4);
+      fp.fillStyle(0x7777bb, 0.18);
+      fp.fillCircle(Phaser.Math.Between(100,245), Phaser.Math.Between(30,175), Phaser.Math.Between(3,9));
+      this.tweens.add({ targets:fp, alpha:0, duration:Phaser.Math.Between(1200,3000), yoyo:true, repeat:-1, delay:Phaser.Math.Between(0,2500) });
+    }
+  }
+
+  drawMissionNode(node) {
+    const g = this.add.graphics().setDepth(10);
+    if (node.unlocked) {
+      g.fillStyle(node.color, node.done?0.15:0.25);
+      g.fillCircle(node.x, node.y, 11);
+      g.fillStyle(node.done?0x666666:node.color, 1);
+      g.fillCircle(node.x, node.y, 5);
+
+      if (!node.done) {
+        this.tweens.add({ targets:g, alpha:0.4, duration:850, yoyo:true, repeat:-1 });
+      }
+
+      this.add.text(node.x, node.y-15, node.label, {
+        fontFamily:'monospace', fontSize:'5px',
+        color:node.done?'#666666':'#F5F0E8', align:'center'
+      }).setOrigin(0.5).setDepth(11);
+
+      if (node.done) {
+        this.add.text(node.x, node.y, '✓', {
+          fontFamily:'monospace', fontSize:'6px', color:'#888888'
+        }).setOrigin(0.5).setDepth(12);
+      }
+
+      if (!node.done && node.scene) {
+        this.add.circle(node.x, node.y, 13, 0,0)
+          .setInteractive().setDepth(12)
+          .on('pointerdown', () => {
+            this.cameras.main.fadeOut(500,0,0,0);
+            this.time.delayedCall(500, () => this.scene.start(node.scene, { inventory:this.inventory }));
+          })
+          .on('pointerover', () => {
+            const tt = this.add.text(node.x, node.y+15, node.sub, {
+              fontFamily:'monospace', fontSize:'5px', color:'#EF9F27', backgroundColor:'#080510'
+            }).setOrigin(0.5).setDepth(20).setName('tt_'+node.label);
+          })
+          .on('pointerout', () => { this.children.getByName('tt_'+node.label)?.destroy(); });
+      }
+    } else {
+      g.fillStyle(0x222244, 0.4);
+      g.fillCircle(node.x, node.y, 5);
+      this.add.text(node.x, node.y-12, node.label, {
+        fontFamily:'monospace', fontSize:'5px', color:'#333355', align:'center'
+      }).setOrigin(0.5).setDepth(11);
+    }
+  }
+}
+
+// ════════════════════════════════════════════════════════════
+// SCENE: VILA RICA 1789 — Fase 1
+// ════════════════════════════════════════════════════════════
+class VillaRicaScene extends BaseMapScene {
+  constructor() { super('VillaRica'); }
+
+  init(data) {
+    this.inventory = data.inventory || new Inventory();
+    this.evidenceFound = { carta:false, confissao:false, mapa:false };
+    this.fragmentCollected = false;
+    this.gameTimer = 0;
+    this.totalTime = 360;
+  }
+
+  create() {
+    this.cameras.main.setBackgroundColor('#160e00');
+
+    // Mapa colonial ampliado — Vila Rica / Ouro Preto
+    const map = [
+      [4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4],
+      [4,12,12,12,12,12,12,12,12,12,4,12,12,12,12,12,12,12,12,12,4,12,12,12,4],
+      [4,12,11,11,11,12,12,5,5,12,4,12,5,5,12,12,12,12,12,12,4,12,11,11,4],
+      [4,12,11,11,11,12,12,5,5,12,4,12,5,5,12,12,12,12,12,12,4,12,11,11,4],
+      [4,12,11,11,11,12,12,12,12,12,4,12,12,12,12,12,12,12,12,12,4,12,12,12,4],
+      [4,4,4,4,6,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,6,4],
+      [4,12,12,12,12,12,12,12,10,10,12,12,10,10,12,12,12,12,12,12,12,12,12,12,4],
+      [4,12,12,12,12,12,12,12,10,10,12,12,10,10,12,12,12,12,12,12,12,12,12,12,4],
+      [4,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,4],
+      [4,4,4,4,4,4,4,4,6,4,4,4,4,4,4,4,6,4,4,4,4,4,4,4,4],
+      [4,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,4],
+      [4,12,11,11,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,11,11,12,4],
+      [4,12,11,11,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,11,11,12,4],
+      [4,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,4],
+      [4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4],
+    ];
+
+    this.initMap(map);
+    this.createPlayer(12*TW+8, 8*TH+8);
+
+    // Igreja no canto (decorativa)
+    this.add.image(3*TW+8, 3*TH-8, 'env_church_front').setDisplaySize(32,24).setDepth(3);
+
+    // Fonte na praça
+    this.add.image(12*TW+8, 7*TH+8, 'env_fountain').setDisplaySize(24,16).setDepth(3);
+
+    // Névoa de distorção na estátua
+    this.nevoaGfx = this.add.graphics().setDepth(20);
+    this.drawNevoaFog(this.nevoaGfx, 12*TW, 6*TH, 34, 34);
+    this.statueLabel = this.add.text(12*TW+16, 6*TH-6, '⚠ DISTORÇÃO\nTiradentes?\nMonarquista?', {
+      fontFamily:'monospace', fontSize:'5px', color:'#8888aa', align:'center', backgroundColor:'#050318'
+    }).setOrigin(0.5).setDepth(21);
+    this.tweens.add({ targets:this.statueLabel, alpha:0.3, duration:1200, yoyo:true, repeat:-1 });
+
+    // NPCs com sprites únicos
+    this.npcData = [
+      { x:5*TW+8, y:7*TH+8, key:'npc_comerciante', name:'Comerciante',
+        lines:[
+          { speaker:'Comerciante', text:'O alferes Tiradentes? Um homem da Coroa, diz a história. Defensor da monarquia portuguesa.' },
+          { speaker:'Comerciante', text:'...Mas há algo estranho. Por que minha memória sobre ele está tão... turva?' },
+        ], talked:false },
+      { x:19*TW+8, y:7*TH+8, key:'npc_padre', name:'Padre',
+        lines:[
+          { speaker:'Padre', text:'Tiradentes nunca mencionou liberdade, filho. Só queria impostos menores para a Coroa.' },
+          { speaker:'Padre', text:'...Espera. Eu mesmo disse isso? Por que sinto que estou repetindo algo que não é verdade?' },
+        ], talked:false },
+      { x:12*TW+8, y:13*TH+8, key:'npc_mulher', name:'Mulher do Povo',
+        lines:[
+          { speaker:'Mulher do Povo', text:'Dizem que os planos dele eram para fortalecer Portugal. Nunca falou em república.' },
+          { speaker:'Mulher do Povo', text:'...Mas eu sei que algo está errado. Vi documentos. A névoa me impede de lembrar.' },
+        ], talked:false },
+    ];
+
+    this.npcSprites = this.npcData.map(n => this.addNPCSprite(n.x, n.y, n.key));
+    this.npcExcl = this.npcData.map(n => this.showExclamation(n.x, n.y));
+
+    // Evidências
+    this.evidenceData = [
+      { x:4*TW+8, y:3*TH+8, key:'item_carta', id:'carta', label:'Carta de Gonzaga',
+        lines:[
+          { speaker:'Diário de Alex', text:'📜 Carta entre conjurados. Fala em "república", "liberdade da pátria", "desligamento do jugo português".' },
+          { speaker:'Diário de Alex', text:'Gonzaga escreve: "o alferes Xavier é o mais ardente de nós todos na causa da independência".' },
+          { speaker:'Diário de Alex', text:'Isso contradiz tudo que as pessoas dizem na praça. PISTA COLETADA.' },
+        ] },
+      { x:21*TW+8, y:3*TH+8, key:'item_confissao', id:'confissao', label:'Confissão Oculta',
+        lines:[
+          { speaker:'Diário de Alex', text:'📜 Cópia de depoimento ao tribunal colonial. Descreve reuniões para proclamar uma REPÚBLICA independente.' },
+          { speaker:'Diário de Alex', text:'Inspirada nos ideais iluministas e na independência americana. Tiradentes se voluntariou sabendo dos riscos.' },
+          { speaker:'Diário de Alex', text:'Ele sabia que podia morrer. E foi mesmo assim. PISTA COLETADA.' },
+        ] },
+      { x:21*TW+8, y:13*TH+8, key:'item_mapa', id:'mapa', label:'Mapa da Conspiração',
+        lines:[
+          { speaker:'Diário de Alex', text:'📜 Mapa com locais de reunião e nomes codificados. Uma rede ampla: advogados, padres, poetas, militares.' },
+          { speaker:'Diário de Alex', text:'A causa está clara: independência do Brasil, fim do domínio português, ABOLIÇÃO DA ESCRAVIDÃO em Minas.' },
+          { speaker:'Diário de Alex', text:'A névoa havia apagado essa parte completamente. PISTA COLETADA.' },
+        ] },
+    ];
+
+    this.evidenceSprites = this.evidenceData.map(e => {
+      const sp = this.add.image(e.x, e.y, e.key).setDisplaySize(14,14).setDepth(9);
+      this.tweens.add({ targets:sp, y:e.y-3, duration:900, yoyo:true, repeat:-1 });
+      this.add.text(e.x, e.y-12, e.label, {
+        fontFamily:'monospace', fontSize:'4px', color:'#EF9F27', align:'center'
+      }).setOrigin(0.5).setDepth(9);
+      return sp;
+    });
+
+    this.dialogue = new DialogueManager(this);
+    this.puzzle = new PuzzleManager(this);
+    this.diary = new DiarySystem(this, this.inventory);
+
+    // HUD
+    this.createHUDBar('VILA RICA · 1789', '#EF9F27');
+    this.hudEvidence = this.add.text(GAME_W/2, 4, 'Pistas: 0/3', {
+      fontFamily:'monospace', fontSize:'6px', color:'#7F77DD'
+    }).setDepth(51).setScrollFactor(0).setOrigin(0.5,0);
+    this.hudTimer = this.add.text(GAME_W-4, 4, '6:00', {
+      fontFamily:'monospace', fontSize:'6px', color:'#c0392b'
+    }).setDepth(51).setScrollFactor(0).setOrigin(1,0);
+
+    this.cameras.main.setBounds(0,0,this.cols*TW, this.rows*TH);
+    this.cameras.main.startFollow(this.playerSprite, true, 0.08, 0.08);
+    this.cameras.main.fadeIn(800);
+
+    this.input.keyboard.on('keydown-SPACE', () => {
+      if (this.dialogue.active) { this.dialogue.advance(); return; }
+      if (this.diary.open) { this.diary.close(); return; }
+      if (!this.puzzle.active) this.checkInteraction();
+    });
+    this.input.keyboard.on('keydown-E', () => {
+      if (!this.dialogue.active&&!this.puzzle.active&&!this.diary.open) this.checkInteraction();
+    });
+    this.input.keyboard.on('keydown-TAB', (e) => { e.preventDefault(); this.diary.toggle(); });
+
+    this.time.delayedCall(800, () => {
+      this.dialogue.show([
+        { speaker:'Clio', text:'Vila Rica, 1789. A cidade mais rica do Brasil colonial. Mas algo está errado.' },
+        { speaker:'Clio', text:'A Névoa do Esquecimento distorceu Tiradentes. As pessoas o lembram como monarquista.' },
+        { speaker:'Clio', text:'Encontre 3 provas da conspiração republicana. WASD para mover. ESPAÇO para interagir. TAB para o diário.' },
+      ], ()=>{});
+    });
+  }
+
+  drawNevoaFog(g, x, y, w, h) {
+    g.fillStyle(0x5555aa, 0.45);
+    g.fillRect(x, y, w, h);
+    for (let i=0; i<6; i++) {
+      g.fillStyle(0x8888cc, 0.2);
+      g.fillRect(x+Phaser.Math.Between(0,w-4), y+Phaser.Math.Between(0,h-4), Phaser.Math.Between(3,8), Phaser.Math.Between(3,8));
+    }
+  }
+
+  checkInteraction() {
+    const p = this.player;
+    for (let i=0; i<this.evidenceData.length; i++) {
+      const e = this.evidenceData[i];
+      if (!this.evidenceFound[e.id] && Phaser.Math.Distance.Between(p.x,p.y,e.x,e.y)<22) {
+        this.evidenceFound[e.id] = true;
+        this.evidenceSprites[i].setAlpha(0.3);
+        this.inventory.addItem({ id:e.id, name:e.label });
+        this.inventory.addDiaryEntry(`Encontrou: ${e.label} em Vila Rica`);
+        this.dialogue.show(e.lines, () => { this.updateEvidenceHUD(); this.checkAllEvidence(); });
+        return;
+      }
+    }
+    for (let i=0; i<this.npcData.length; i++) {
+      const n = this.npcData[i];
+      if (Phaser.Math.Distance.Between(p.x,p.y,n.x,n.y)<22) {
+        if (this.npcExcl[i]) { this.npcExcl[i].setVisible(false); }
+        this.dialogue.show(n.lines, ()=>{ n.talked=true; });
+        return;
+      }
+    }
+    if (Phaser.Math.Distance.Between(p.x,p.y, 12*TW+16, 6*TH+16)<30) {
+      if (Object.values(this.evidenceFound).every(Boolean)) { this.startPuzzle(); }
+      else {
+        this.dialogue.show([{ speaker:'Clio', text:'A distorção ainda está forte. Encontre as 3 pistas antes de tentar conectá-las.' }], ()=>{});
+      }
+    }
+  }
+
+  updateEvidenceHUD() {
+    const count = Object.values(this.evidenceFound).filter(Boolean).length;
+    this.hudEvidence.setText(`Pistas: ${count}/3`);
+    if (count===3) this.hudEvidence.setColor('#EF9F27');
+  }
+
+  checkAllEvidence() {
+    if (Object.values(this.evidenceFound).every(Boolean)) {
+      this.time.delayedCall(500, () => {
+        this.dialogue.show([{ speaker:'Clio', text:'Você coletou todas as provas! Vá até a distorção na praça central e use o Mural de Investigação.' }], ()=>{});
+      });
+    }
+  }
+
+  startPuzzle() {
+    this.puzzle.show({
+      description:'Conecte as pistas à verdade sobre Tiradentes',
+      nodes:[
+        { x:GAME_W/2, y:GAME_H/2-10, label:'TIRADENTES\n(Distorção)', w:62, h:26, isCenter:true },
+        { x:60, y:56, label:'Carta de\nGonzaga', w:56, h:22, isCenter:false },
+        { x:GAME_W-58, y:56, label:'Confissão\nOculta', w:56, h:22, isCenter:false },
+        { x:GAME_W/2, y:GAME_H-46, label:'Mapa da\nConspiração', w:56, h:22, isCenter:false },
+        { x:60, y:GAME_H-46, label:'Causa:\nRepública', w:56, h:22, isCenter:false },
+        { x:GAME_W-58, y:GAME_H-46, label:'Abolição\nem Minas', w:56, h:22, isCenter:false },
+      ],
+      required:[[0,1],[0,2],[0,3]]
+    }, (solved) => { if (solved) this.solvePuzzle(); });
+  }
+
+  solvePuzzle() {
+    this.cameras.main.flash(500,180,160,255);
+    this.cameras.main.shake(300,0.008);
+    this.tweens.add({ targets:this.nevoaGfx, alpha:0, duration:1500 });
+    this.tweens.add({ targets:this.statueLabel, alpha:0, duration:1000, onComplete:()=>{
+      this.statueLabel.destroy();
+      this.add.text(12*TW+16, 6*TH-8, '✦ Tiradentes\nMártir da\nIndependência', {
+        fontFamily:'monospace', fontSize:'5px', color:'#EF9F27', align:'center'
+      }).setOrigin(0.5).setDepth(22);
+    }});
+    this.dialogue.show([
+      { speaker:'Clio', text:'A névoa recua! A verdade sobre Tiradentes emerge: ele era republicano, lutou pela independência, deu a vida por uma ideia.' },
+      { speaker:'Clio', text:'A Inconfidência Mineira falhou por traição — Silvério dos Reis os entregou. Mas a semente ficou.' },
+      { speaker:'Diário de Alex', text:'A história não é uma lista de mocinhos e vilões. É sobre escolhas reais de pessoas reais. Tiradentes fez a sua.' },
+    ], ()=>{ this.collectFragment(); });
+  }
+
+  collectFragment() {
+    const fx=12*TW+16, fy=6*TH+20;
+    const frag = this.add.image(fx, fy, 'item_fragment').setDisplaySize(14,14).setDepth(30);
+    this.tweens.add({ targets:frag, y:fy-5, duration:700, yoyo:true, repeat:2, onComplete:()=>{
+      frag.destroy();
+      this.inventory.addFragment();
+      this.inventory.completeScene('VillaRica');
+      this.inventory.addDiaryEntry('Fragmento coletado: Vila Rica 1789 — chama de Tiradentes');
+      this.fragmentCollected = true;
+      Save.save(this.inventory.toJSON());
+      this.dialogue.show([
+        { speaker:'Clio', text:'✦ Fragmento de Memória coletado! Vila Rica brilha no mapa do Brasil.' },
+        { speaker:'Clio', text:'Retorne ao Templo da Memória para acessar o próximo período.' },
+      ], ()=>{
+        this.add.text(GAME_W/2, GAME_H-20, '[ RETORNAR AO TEMPLO ]', {
+          fontFamily:'monospace', fontSize:'7px', color:'#EF9F27', backgroundColor:'#3C3489', padding:{x:8,y:4}
+        }).setOrigin(0.5).setDepth(60).setScrollFactor(0).setInteractive()
+          .on('pointerdown', ()=>{
+            this.cameras.main.fadeOut(600,0,0,0);
+            this.time.delayedCall(600, ()=>this.scene.start('Hub', { inventory:this.inventory }));
+          });
+      });
+    }});
+  }
+
+  update(time, delta) {
+    this.movePlayer(delta, this.dialogue, this.diary);
+    if (!this.fragmentCollected&&!this.dialogue.active&&!this.diary.open) {
+      this.gameTimer+=delta/1000;
+      const rem=Math.max(0, this.totalTime-this.gameTimer);
+      const m=Math.floor(rem/60), s=Math.floor(rem%60);
+      this.hudTimer&&this.hudTimer.setText(`${m}:${s.toString().padStart(2,'0')}`);
+      if (rem<60) this.hudTimer?.setColor('#ff4444');
+    }
+    const p=this.player;
+    let near=false;
+    this.evidenceData.forEach(e=>{ if (!this.evidenceFound[e.id]&&Phaser.Math.Distance.Between(p.x,p.y,e.x,e.y)<22) near=true; });
+    this.npcData.forEach(n=>{ if (Phaser.Math.Distance.Between(p.x,p.y,n.x,n.y)<22) near=true; });
+    if (Phaser.Math.Distance.Between(p.x,p.y, 12*TW+16, 6*TH+16)<30) near=true;
+    if (this.interactHint) this.interactHint.setVisible(near&&!this.dialogue.active&&!this.diary.open);
+    if (this.nevoaGfx&&this.nevoaGfx.alpha>0) {
+      this.nevoaGfx.alpha=0.7+Math.sin(time*0.003)*0.3;
+    }
+  }
+}
+
+// ════════════════════════════════════════════════════════════
+// SCENE: RIO DE JANEIRO 1889 — Fase 2 COMPLETA
+// ════════════════════════════════════════════════════════════
+class RioScene extends BaseMapScene {
+  constructor() { super('RioScene'); }
+
+  init(data) {
+    this.inventory = data.inventory || new Inventory();
+    this.evidenceFound = { jornal:false, carta:false, depoimento:false };
+    this.fragmentCollected = false;
+    this.deodoroDone = false;
+    this.dompedroRevealed = false;
+    this.sequenceDone = false;
+    this.gameTimer = 0;
+    this.totalTime = 420;
+  }
+
+  create() {
+    this.cameras.main.setBackgroundColor('#0a1410');
+
+    // Mapa: Campo de Santana + Paço Imperial + ruas do Rio 1889
+    const map = [
+      [4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4],
+      [4,12,12,12,12,12,12,12,12,12,12,4,12,12,12,12,12,12,12,12,12,12,12,12,4,11,11,4],
+      [4,12,5,5,5,5,5,12,12,12,12,4,12,12,11,11,12,12,12,12,12,12,12,12,4,11,11,4],
+      [4,12,5,5,5,5,5,12,12,12,12,4,12,12,11,11,12,12,12,12,12,12,12,12,4,12,12,4],
+      [4,12,5,5,5,5,5,12,12,12,12,4,12,12,12,12,12,12,5,5,5,5,12,12,4,12,12,4],
+      [4,12,5,5,5,5,5,12,12,12,12,4,12,12,12,12,12,12,5,5,5,5,12,12,4,12,12,4],
+      [4,12,12,12,12,12,12,12,10,10,12,4,12,12,12,12,12,12,5,5,5,5,12,12,4,12,12,4],
+      [4,12,12,12,12,12,12,12,10,10,12,4,12,12,12,12,12,12,12,12,12,12,12,12,4,12,12,4],
+      [4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4],
+      [4,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,4],
+      [4,12,11,11,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,11,11,4],
+      [4,12,11,11,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,11,11,4],
+      [4,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,12,4],
+      [4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4],
+    ];
+
+    this.initMap(map);
+    this.createPlayer(14*TW+8, 9*TH+8);
+
+    // Decoração ambiente
+    // Palmeiras imperiais (representadas por tiles de grama agrupados)
+    this.add.image(4*TW, 3*TH, 'tile_grass').setDisplaySize(20,24).setDepth(3);
+    this.add.image(4*TW+20, 3*TH, 'tile_grass').setDisplaySize(20,24).setDepth(3);
+    this.add.image(4*TW, 5*TH, 'tile_grass').setDisplaySize(20,24).setDepth(3);
+    // Fonte no Campo de Santana
+    this.add.image(4*TW+8, 6*TH+8, 'env_fountain').setDisplaySize(24,16).setDepth(3);
+    // Fachada do Paço Imperial (lado direito do mapa)
+    this.add.image(26*TW, 2*TH, 'env_church_front').setDisplaySize(32,20).setDepth(3);
+
+    // Névoa de distorção — em várias áreas
+    this.nevoaAreas = [];
+    const nevoaPos = [[4,9,40,24], [12,6,32,20], [20,10,30,20]];
+    nevoaPos.forEach(([cx,cy,w,h]) => {
+      const ng = this.add.graphics().setDepth(20);
+      ng.fillStyle(0x4455aa, 0.38);
+      ng.fillRect(cx*TW, cy*TH, w, h);
+      this.nevoaAreas.push(ng);
+      this.tweens.add({ targets:ng, alpha:0.15, duration:Phaser.Math.Between(1200,2000), yoyo:true, repeat:-1 });
+    });
+
+    // NPCs
+    this.npcData = [
+      { x:7*TW+8,  y:9*TH+8,  key:'npc_jornalista', name:'Jornalista',
+        state:'idle', talked:false,
+        lines:[
+          { speaker:'Jornalista', text:'Que dia incrível! A República foi proclamada ontem! O povo saiu às ruas comemorando!' },
+          { speaker:'Jornalista', text:'...Hm. Verdade? Minhas páginas estão todas embaralhadas. Não consigo lembrar a ordem exata dos fatos.' },
+          { speaker:'Jornalista', text:'Ajude-me a reordenar os eventos do dia 15 de novembro. É tudo que preciso para publicar a verdade.' },
+        ]
+      },
+      { x:14*TW+8, y:9*TH+8, key:'npc_deodoro', name:'Marechal Deodoro',
+        state:'idle', talked:false,
+        lines:[
+          { speaker:'Deodoro', text:'Sou o herói do povo! As massas clamaram por mim, e eu proclamei a República!' },
+          { speaker:'Deodoro', text:'...Na verdade... não é bem assim. Eu era... eu era monarquista. Fui movido por uma disputa pessoal com o gabinete.' },
+          { speaker:'Deodoro', text:'O povo de Aristides Lobo? "Assistiu a tudo bestializado". Não houve aclamação popular. Mas a névoa não deixa eu contar a verdade.' },
+        ]
+      },
+      { x:20*TW+8, y:9*TH+8, key:'npc_civil', name:'Civil',
+        state:'idle', talked:false,
+        lines:[
+          { speaker:'Civil', text:'Vi tudo no Campo de Santana. Os militares passaram... o pessoal ficou parado, sem entender.' },
+          { speaker:'Civil', text:'Dom Pedro II? Disseram que ele ficou com raiva, xingou todo mundo. Mas a névoa me impede de ver a carta certa...' },
+        ]
+      },
+      { x:25*TW+8, y:10*TH+8, key:'npc_dompedro', name:'Dom Pedro II',
+        state:'idle', talked:false, needsEvidence:true,
+        lines:[
+          { speaker:'Dom Pedro II', text:'[A névoa distorce a carta... só palavras de ódio e rancor aparecem]' },
+          { speaker:'Clio', text:'Precisamos da Carta Verdadeira de Dom Pedro para revelar seus sentimentos reais.' },
+        ],
+        linesRevealed:[
+          { speaker:'Dom Pedro II', text:'"Partindo, talvez para jamais, desta terra que me é muito querida, desejo a felicidade de todos..."' },
+          { speaker:'Dom Pedro II', text:'"Abdicação é ato de amor ao Brasil. Não parto com raiva. Parto com saudade."' },
+          { speaker:'Diário de Alex', text:'A carta não tem ódio. Tem resignação. Dom Pedro aceitou o exílio com serenidade. A névoa mentiu.' },
+        ]
+      },
+    ];
+
+    this.npcSprites = this.npcData.map(n => this.addNPCSprite(n.x, n.y, n.key));
+    this.npcExcl = this.npcData.map(n => this.showExclamation(n.x, n.y));
+
+    // Evidências
+    this.evidenceData = [
+      { x:3*TW+8, y:2*TH+8, key:'item_jornal', id:'jornal', label:'Jornal Embaralhado',
+        lines:[
+          { speaker:'Diário de Alex', text:'📰 Páginas do jornal do dia 15 de novembro de 1889. Os eventos da Proclamação... mas em ordem errada.' },
+          { speaker:'Diário de Alex', text:'Preciso mostrar ao jornalista para que ele possa ordenar. ITEM COLETADO.' },
+        ]
+      },
+      { x:22*TW+8, y:2*TH+8, key:'item_carta_rio', id:'carta', label:'Carta de Dom Pedro II',
+        lines:[
+          { speaker:'Diário de Alex', text:'📜 Uma carta dobrada, endereçada ao Brasil. A névoa tenta distorcê-la como "carta de ódio"...' },
+          { speaker:'Diário de Alex', text:'Mas minha Visão do Guardião revela o texto real: palavras de amor e resignação serena. ITEM COLETADO.' },
+        ]
+      },
+      { x:13*TW+8, y:2*TH+8, key:'item_depoimento', id:'depoimento', label:'Depoimento de Aristides Lobo',
+        lines:[
+          { speaker:'Diário de Alex', text:'📜 "O povo assistiu àquilo bestializado, sem saber o que significava." — Aristides Lobo, 1889.' },
+          { speaker:'Diário de Alex', text:'A República não foi uma conquista popular. Foi um movimento de militares, sem participação das ruas. ITEM COLETADO.' },
+        ]
+      },
+    ];
+
+    this.evidenceSprites = this.evidenceData.map(e => {
+      const sp = this.add.image(e.x, e.y, e.key).setDisplaySize(14,14).setDepth(9);
+      this.tweens.add({ targets:sp, y:e.y-3, duration:1000, yoyo:true, repeat:-1 });
+      this.add.text(e.x, e.y-12, e.label, {
+        fontFamily:'monospace', fontSize:'4px', color:'#2d9e4a', align:'center'
+      }).setOrigin(0.5).setDepth(9);
+      return sp;
+    });
+
+    this.dialogue = new DialogueManager(this);
+    this.puzzle = new PuzzleManager(this);
+    this.seqPuzzle = new SequencePuzzle(this);
+    this.diary = new DiarySystem(this, this.inventory);
+
+    // HUD
+    this.createHUDBar('RIO DE JANEIRO · 1889', '#2d9e4a');
+    this.hudEvidence = this.add.text(GAME_W/2, 4, 'Revelações: 0/3', {
+      fontFamily:'monospace', fontSize:'6px', color:'#60cc80'
+    }).setDepth(51).setScrollFactor(0).setOrigin(0.5,0);
+    this.hudTimer = this.add.text(GAME_W-4, 4, '7:00', {
+      fontFamily:'monospace', fontSize:'6px', color:'#c0392b'
+    }).setDepth(51).setScrollFactor(0).setOrigin(1,0);
+
+    this.cameras.main.setBounds(0,0,this.cols*TW, this.rows*TH);
+    this.cameras.main.startFollow(this.playerSprite, true, 0.08, 0.08);
+    this.cameras.main.fadeIn(800);
+
+    this.input.keyboard.on('keydown-SPACE', () => {
+      if (this.dialogue.active) { this.dialogue.advance(); return; }
+      if (this.diary.open) { this.diary.close(); return; }
+      if (!this.puzzle.active&&!this.seqPuzzle.active) this.checkInteraction();
+    });
+    this.input.keyboard.on('keydown-E', () => {
+      if (!this.dialogue.active&&!this.puzzle.active&&!this.seqPuzzle.active&&!this.diary.open) this.checkInteraction();
+    });
+    this.input.keyboard.on('keydown-TAB', (e) => { e.preventDefault(); this.diary.toggle(); });
+
+    this.time.delayedCall(800, () => {
+      this.dialogue.show([
+        { speaker:'Clio', text:'Rio de Janeiro, 15 de novembro de 1889. Um golpe militar que a história chamou de Proclamação da República.' },
+        { speaker:'Clio', text:'A Névoa criou três distorções: a República como festa popular, Deodoro como herói aclamado, Dom Pedro como tirano furioso.' },
+        { speaker:'Clio', text:'Três enigmas para revelar. Encontre as evidências, fale com os personagens, corrija as distorções.' },
+      ], ()=>{});
+    });
+  }
+
+  checkInteraction() {
+    const p = this.player;
+
+    // Evidências
+    for (let i=0; i<this.evidenceData.length; i++) {
+      const e = this.evidenceData[i];
+      if (!this.evidenceFound[e.id] && Phaser.Math.Distance.Between(p.x,p.y,e.x,e.y)<22) {
+        this.evidenceFound[e.id] = true;
+        this.evidenceSprites[i].setAlpha(0.3);
+        this.inventory.addItem({ id:'rio_'+e.id, name:e.label });
+        this.inventory.addDiaryEntry(`Encontrou: ${e.label} no Rio 1889`);
+        this.dialogue.show(e.lines, ()=>{ this.updateEvidenceHUD(); });
+        return;
+      }
+    }
+
+    // NPCs
+    for (let i=0; i<this.npcData.length; i++) {
+      const n = this.npcData[i];
+      if (Phaser.Math.Distance.Between(p.x,p.y,n.x,n.y)<24) {
+        if (this.npcExcl[i]) { this.npcExcl[i].setVisible(false); }
+
+        if (n.name === 'Jornalista') {
+          if (!this.evidenceFound.jornal) {
+            this.dialogue.show([
+              { speaker:'Jornalista', text:'Minhas páginas estão embaralhadas! Você viu um jornal caído por aí?' }
+            ], ()=>{});
+          } else if (!this.sequenceDone) {
+            this.startSequencePuzzle();
+          } else {
+            this.dialogue.show([{ speaker:'Jornalista', text:'Obrigado! A verdade precisa ser publicada. A República não foi aclamação — foi um golpe silencioso.' }], ()=>{});
+          }
+          return;
+        }
+
+        if (n.name === 'Marechal Deodoro') {
+          if (!this.evidenceFound.depoimento) {
+            this.dialogue.show(n.lines, ()=>{});
+          } else if (!this.deodoroDone) {
+            this.revealDeodoro();
+          } else {
+            this.dialogue.show([{ speaker:'Deodoro', text:'Proclamei a República por acidente, num momento de raiva política. A história foi mais generosa comigo do que eu mereço.' }], ()=>{});
+          }
+          return;
+        }
+
+        if (n.name === 'Dom Pedro II') {
+          if (!this.evidenceFound.carta) {
+            this.dialogue.show(n.lines, ()=>{});
+          } else if (!this.dompedroRevealed) {
+            this.revealDomPedro();
+          } else {
+            this.dialogue.show([{ speaker:'Dom Pedro II', text:'Obrigado, jovem. Minha história merecia ser contada com mais cuidado.' }], ()=>{});
+          }
+          return;
+        }
+
+        this.dialogue.show(n.lines, ()=>{ n.talked=true; });
+        return;
+      }
+    }
+
+    // Verificar se todas as revelações foram feitas para o puzzle final
+    if (this.allRevealed() && !this.fragmentCollected) {
+      this.startFinalPuzzle();
+    }
+  }
+
+  startSequencePuzzle() {
+    this.seqPuzzle.show({
+      description: 'Ordene os eventos da Proclamação da República (15/11/1889)',
+      items: [
+        'Deodoro reúne tropas na madrugada por disputa com gabinete Ouro Preto',
+        'Tropas cercam o Quartel General — Ouro Preto renuncia',
+        'Deodoro proclama a República sem planejamento prévio',
+        'Povo assiste "bestializado" sem entender o que acontece',
+        'Dom Pedro II recebe a notícia e aceita o exílio em silêncio',
+        'República proclamada — sem voto, sem revolução popular',
+      ],
+      correctOrder: [0,1,2,3,4,5]
+    }, (solved) => {
+      if (solved) {
+        this.sequenceDone = true;
+        this.updateEvidenceHUD();
+        this.dialogue.show([
+          { speaker:'Jornalista', text:'Perfeito! A sequência correta: um conflito pessoal virou República. Sem planejamento. Sem o povo.' },
+          { speaker:'Diário de Alex', text:'A República nasceu de uma disputa de gabinete. Não de uma revolução popular. Aristides Lobo tinha razão.' },
+        ], ()=>{});
+      }
+    });
+  }
+
+  revealDeodoro() {
+    this.deodoroDone = true;
+    this.cameras.main.flash(400, 100,180,100);
+    this.dialogue.show([
+      { speaker:'Deodoro', text:'Com esse depoimento nas mãos... não posso mais mentir. Era monarquista. Proclamei por raiva do gabinete.' },
+      { speaker:'Deodoro', text:'O povo não me clamou. Estava confuso. A República que proclamei não foi a que o Brasil precisava.' },
+      { speaker:'Diário de Alex', text:'Heróis são complicados. Deodoro fez algo importante por razões erradas. Isso não apaga o ato — mas muda o significado.' },
+    ], ()=>{ this.updateEvidenceHUD(); });
+  }
+
+  revealDomPedro() {
+    this.dompedroRevealed = true;
+    this.cameras.main.flash(400, 150,150,255);
+    const n = this.npcData.find(n=>n.name==='Dom Pedro II');
+    if (n) this.dialogue.show(n.linesRevealed, ()=>{ this.updateEvidenceHUD(); });
+  }
+
+  allRevealed() {
+    return this.sequenceDone && this.deodoroDone && this.dompedroRevealed;
+  }
+
+  updateEvidenceHUD() {
+    const count = [this.sequenceDone, this.deodoroDone, this.dompedroRevealed].filter(Boolean).length;
+    this.hudEvidence.setText(`Revelações: ${count}/3`);
+    if (count===3) {
+      this.hudEvidence.setColor('#EF9F27');
+      this.time.delayedCall(400, ()=>{
+        this.dialogue.show([{ speaker:'Clio', text:'Todas as distorções reveladas! Agora conecte os fatos no Mural Central.' }], ()=>{});
+      });
+    }
+  }
+
+  startFinalPuzzle() {
+    this.puzzle.show({
+      description:'Conecte os fatos da Proclamação — quem foi, como foi, por quê',
+      nodes:[
+        { x:GAME_W/2, y:GAME_H/2-5, label:'PROCLAMAÇÃO\nDA REPÚBLICA', w:70, h:26, isCenter:true },
+        { x:58, y:55, label:'Deodoro:\nmonárquico\nque proclamou', w:60, h:30, isCenter:false },
+        { x:GAME_W-56, y:55, label:'Povo:\n"bestializado"\nnão participou', w:60, h:30, isCenter:false },
+        { x:58, y:GAME_H-50, label:'Dom Pedro:\nresignação\nnão raiva', w:60, h:28, isCenter:false },
+        { x:GAME_W-56, y:GAME_H-50, label:'Causa:\ndisputa de\ngabinete', w:60, h:28, isCenter:false },
+      ],
+      required:[[0,1],[0,2],[0,3],[0,4]]
+    }, (solved) => { if (solved) this.solvePuzzle(); });
+  }
+
+  solvePuzzle() {
+    this.cameras.main.flash(500, 150,220,150);
+    this.cameras.main.shake(300, 0.007);
+    this.nevoaAreas.forEach(ng => {
+      this.tweens.add({ targets:ng, alpha:0, duration:1500 });
+    });
+    this.dialogue.show([
+      { speaker:'Clio', text:'A névoa recua do Rio de Janeiro! A República de 1889 não foi uma revolução popular — foi um golpe de Estado militar.' },
+      { speaker:'Clio', text:'Deodoro era monarquista. Dom Pedro partiu com amor, não com raiva. O povo assistiu sem entender.' },
+      { speaker:'Diário de Alex', text:'Isso não torna a República errada. Mas muda a pergunta: se o povo não fez, de quem é a República?' },
+    ], ()=>{ this.collectFragment(); });
+  }
+
+  collectFragment() {
+    const fx=14*TW+8, fy=9*TH;
+    const frag = this.add.image(fx,fy,'fragment_rio').setDisplaySize(14,14).setDepth(30);
+    this.tweens.add({ targets:frag, y:fy-5, duration:700, yoyo:true, repeat:2, onComplete:()=>{
+      frag.destroy();
+      this.inventory.addFragment();
+      this.inventory.completeScene('RioScene');
+      this.inventory.addDiaryEntry('Fragmento coletado: Rio 1889 — coroa partida ao meio');
+      this.fragmentCollected = true;
+      Save.save(this.inventory.toJSON());
+      this.dialogue.show([
+        { speaker:'Clio', text:'✦ Fragmento da Coroa coletado! Rio de Janeiro brilha no mapa do Brasil.' },
+        { speaker:'Clio', text:'Dois fragmentos. Duas verdades restauradas. Mas a Névoa ainda encobre São Paulo e Rio de 1904.' },
+      ], ()=>{
+        this.add.text(GAME_W/2, GAME_H-18, '[ RETORNAR AO TEMPLO ]', {
+          fontFamily:'monospace', fontSize:'7px', color:'#EF9F27', backgroundColor:'#1a3020', padding:{x:8,y:4}
+        }).setOrigin(0.5).setDepth(60).setScrollFactor(0).setInteractive()
+          .on('pointerdown', ()=>{
+            this.cameras.main.fadeOut(600,0,0,0);
+            this.time.delayedCall(600, ()=>this.scene.start('Hub', { inventory:this.inventory }));
+          });
+      });
+    }});
+  }
+
+  update(time, delta) {
+    this.movePlayer(delta, this.dialogue, this.diary);
+    if (!this.fragmentCollected&&!this.dialogue.active&&!this.diary.open) {
+      this.gameTimer+=delta/1000;
+      const rem=Math.max(0, this.totalTime-this.gameTimer);
+      const m=Math.floor(rem/60), s=Math.floor(rem%60);
+      this.hudTimer&&this.hudTimer.setText(`${m}:${s.toString().padStart(2,'0')}`);
+      if (rem<60) this.hudTimer?.setColor('#ff4444');
+    }
+    const p=this.player;
+    let near=false;
+    this.evidenceData.forEach(e=>{ if (!this.evidenceFound[e.id]&&Phaser.Math.Distance.Between(p.x,p.y,e.x,e.y)<22) near=true; });
+    this.npcData.forEach(n=>{ if (Phaser.Math.Distance.Between(p.x,p.y,n.x,n.y)<24) near=true; });
+    if (this.interactHint) this.interactHint.setVisible(near&&!this.dialogue.active&&!this.diary.open);
+  }
+}
+
+// ════════════════════════════════════════════════════════════
+// PHASER CONFIG & LAUNCH
+// ════════════════════════════════════════════════════════════
+const config = {
+  type: Phaser.AUTO,
+  width: GAME_W,
+  height: GAME_H,
+  zoom: SCALE,
+  parent: 'game-container',
+  pixelArt: true,
+  antialias: false,
+  backgroundColor: '#0a0a0f',
+  scene: [BootScene, MenuScene, PrologueScene, HubScene, VillaRicaScene, RioScene],
+  input: { keyboard:{ target:window } },
+  render: { pixelArt:true, antialias:false, antialiasGL:false }
+};
+
+const game = new Phaser.Game(config);
+</script>
+</body>
+</html>
