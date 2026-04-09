@@ -1,47 +1,57 @@
-import Phaser from 'phaser';
-
 export default class Player extends Phaser.Physics.Arcade.Sprite {
     constructor(scene, x, y) {
-        super(scene, x, y, 'player');
+        super(scene, x, y, 'alex');
+        
         scene.add.existing(this);
         scene.physics.add.existing(this);
 
         this.setCollideWorldBounds(true);
-        this.speed = 120;
+        this.body.setSize(12, 10);
+        this.body.setOffset(2, 14);
+
+        this.speed = 90;
         this.facing = 'down';
-        this.isGuardian = false;
 
         this.createAnims();
+        
+        this.cursors = scene.input.keyboard.createCursorKeys();
+        this.wasd = scene.input.keyboard.addKeys({
+            up: Phaser.Input.Keyboard.KeyCodes.W,
+            down: Phaser.Input.Keyboard.KeyCodes.S,
+            left: Phaser.Input.Keyboard.KeyCodes.A,
+            right: Phaser.Input.Keyboard.KeyCodes.D
+        });
     }
 
     createAnims() {
         const anims = this.scene.anims;
-        // Mapeamento: Linha 0: Down, 1: Left, 2: Right, 3: Up
+        if (anims.exists('walk-down')) return;
+
         const dirs = ['down', 'left', 'right', 'up'];
         dirs.forEach((dir, i) => {
             anims.create({
                 key: `walk-${dir}`,
-                frames: anims.generateFrameNumbers('player', { start: i * 5, end: i * 5 + 2 }),
+                frames: anims.generateFrameNumbers('alex', { start: i * 5, end: i * 5 + 2 }),
                 frameRate: 8,
                 repeat: -1
             });
             anims.create({
                 key: `idle-${dir}`,
-                frames: [{ key: 'player', frame: i * 5 + 3 }],
+                frames: [{ key: 'alex', frame: i * 5 + 3 }],
                 frameRate: 1
             });
         });
     }
 
-    update(cursors, wasd) {
+    update() {
         this.body.setVelocity(0);
         let vx = 0, vy = 0;
 
-        if (cursors.left.isDown || wasd.left.isDown) { vx = -this.speed; this.facing = 'left'; }
-        else if (cursors.right.isDown || wasd.right.isDown) { vx = this.speed; this.facing = 'right'; }
+        if (this.cursors.left.isDown || this.wasd.left.isDown) { vx = -this.speed; this.facing = 'left'; }
+        else if (this.cursors.right.isDown || this.wasd.right.isDown) { vx = this.speed; this.facing = 'right'; }
         
-        if (cursors.up.isDown || wasd.up.isDown) { vy = -this.speed; this.facing = 'up'; }
-        else if (cursors.down.isDown || wasd.down.isDown) { vy = this.speed; this.facing = 'down'; }
+        if (this.cursors.up.isDown || this.wasd.up.isDown) { vy = -this.speed; this.facing = 'up'; }
+        else if (this.cursors.down.isDown || this.wasd.down.isDown) { vy = this.speed; this.facing = 'down'; }
 
         if (vx !== 0 && vy !== 0) { vx *= 0.707; vy *= 0.707; }
 
@@ -54,8 +64,7 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
         }
     }
 
-    toggleGuardian(active) {
-        this.isGuardian = active;
-        active ? this.setTint(0x9966ff) : this.clearTint();
+    toggleGuardianVision(active) {
+        active ? this.setTint(0x7F77DD) : this.clearTint();
     }
 }
