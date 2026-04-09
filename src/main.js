@@ -1,18 +1,12 @@
-import BootScene from './scenes/BootScene.js';
-import BibliotecaScene from './scenes/fases/biblioteca/BibliotecaScene.js';
-
 const config = {
     type: Phaser.AUTO,
-    width: 320,
-    height: 200,
-    zoom: 3,
     parent: 'game-container',
-    pixelArt: true,
+    width: 800,
+    height: 600,
+    pixelArt: true, // ESSENCIAL para o estilo Harvest Moon
     physics: {
         default: 'arcade',
-        arcade: { gravity: { y: 0 }, debug: false }
+        arcade: { gravity: { y: 0 } }
     },
-    scene: [ BootScene, BibliotecaScene ]
+    scene: [BootScene, BibliotecaScene]
 };
-
-const game = new Phaser.Game(config);
