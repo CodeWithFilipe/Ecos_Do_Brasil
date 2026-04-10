@@ -8,9 +8,11 @@ export default class BootScene extends Phaser.Scene {
     }
 
     preload() {
-        this.load.spritesheet('alex', 'assets/sprites/player/spritesheet.png', {
-            frameWidth: 68,
-            frameHeight: 68
+        this.load.spritesheet('alex', 'assets\sprites\player\idle_down.png', 'assets\sprites\player\idle_left.png' , 'assets\sprites\player\idle_right.png','assets\sprites\player\idle_up.png' {
+['down', 'up', 'left', 'right'].forEach(dir => {
+    this.load.image(`idle_${dir}`, `assets/player/idle_${dir}.png`);
+    this.load.image(`walk_${dir}`, `assets/player/walk_${dir}.png`);
+});
         });
         this.load.image('tileset_interior', 'assets/tilesets/Tileset_32x32_1.png');
     }
