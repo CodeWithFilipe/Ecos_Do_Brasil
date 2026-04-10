@@ -6,9 +6,9 @@
 // ─────────────────────────────────────────────────────────────
 
 import Player          from '../../../entities/Player.js';
-import DialogueManager from '../../../systems/DialogueManager.js';
-import Diario          from '../../../systems/Diario.js';
-import InputHandler    from '../../../systems/InputHandler.js';
+import DialogueManager from '../../../ui/DialogueManager.js';
+import Diario          from '../../../ui/Diario.js';
+import InputHandler    from '../../../core/InputHandler.js';
 
 export default class BibliotecaScene extends Phaser.Scene {
     constructor() { super('Biblioteca'); }
