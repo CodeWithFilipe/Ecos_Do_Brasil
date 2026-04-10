@@ -1,46 +1,433 @@
-import Player from '../../entities/Player.js'; // Ajuste o caminho se necessário
+// ─────────────────────────────────────────────────────────────
+// scenes/fases/biblioteca/BibliotecaScene.js
+// ─────────────────────────────────────────────────────────────
+
+import Player          from '../../../entities/Player.js';
+import DialogueManager from '../../../ui/DialogueManager.js';
+import Diario          from '../../../ui/Diario.js';
+import InputHandler    from '../../../core/InputHandler.js';
 
 export default class BibliotecaScene extends Phaser.Scene {
     constructor() { super('Biblioteca'); }
 
     create() {
-        const { width, height } = this.scale;
+        this.physics.world.setBounds(0, 0, 320, 200);
 
-        // 1. Pintando o chão e a parede de fundo usando TileSprite (Repetição)
-        this.add.tileSprite(0, 0, width * 2, height * 2, 'piso_madeira_pro').setOrigin(0, 0).setDepth(0);
-        this.add.tileSprite(0, 0, width * 2, 64, 'parede_pro').setOrigin(0, 0).setDepth(1);
+        this.sala          = 'biblioteca';  
+        this.pilhasVistas  = [false, false, false];
+        this.livroAtivado  = false;
 
-        // 2. Grupo de obstáculos (Móveis sólidos onde o player bate)
-        this.obstaculos = this.physics.add.staticGroup();
+        this.input_h  = new InputHandler(this);
+        this.dialogo  = new DialogueManager(this);
+        this.diario   = new Diario(this);
 
-        // Construindo a Biblioteca via Coordenadas (x, y)
-        // Linha de estantes no fundo da sala
-        this.obstaculos.create(100, 70, 'estante_pro').setSize(96, 40).setOffset(0, 56).setDepth(2);
-        this.obstaculos.create(250, 70, 'estante_pro').setSize(96, 40).setOffset(0, 56).setDepth(2);
-        this.obstaculos.create(400, 70, 'estante_pro').setSize(96, 40).setOffset(0, 56).setDepth(2);
+        this._criarBiblioteca();
+        this._criarPlayer();
+        this._criarCamera();
+        this._criarHUD();
+        this._criarEventos();
 
-        // Mesas de estudo no centro
-        this.obstaculos.create(200, 300, 'mesa_pro').setSize(64, 20).setOffset(0, 16).setDepth(2);
-        this.obstaculos.create(450, 300, 'mesa_pro').setSize(64, 20).setOffset(0, 16).setDepth(2);
+        this.cameras.main.fadeIn(600);
+        this.time.delayedCall(700, () => this._introDialogo());
+    }
 
-        // 3. Adicionando o Player (Alex)
-        this.player = new Player(this, width / 2, height - 100);
-        this.player.setDepth(3); // Fica por cima do chão, interage com a profundidade dos móveis
+    // ════════════════════════════════════════════════════════════
+    // CONSTRUÇÃO — BIBLIOTECA
+    // ════════════════════════════════════════════════════════════
 
-        // 4. NPC Professora (Opcional, com física se quiser falar com ela)
-        this.professora = this.physics.add.staticSprite(600, 150, 'prof_down');
-        this.professora.setDepth(2);
+    _criarBiblioteca() {
+        // Piso
+        this.add.tileSprite(0, 0, 320, 200, 'piso_madeira').setOrigin(0).setDepth(0);
 
-        // 5. Ativando as colisões
-        this.physics.add.collider(this.player, this.obstaculos);
-        this.physics.add.collider(this.player, this.professora);
+        // Paredes (grupo estático para colisão)
+        this.paredes = this.physics.add.staticGroup();
 
-        // 6. Configuração da Câmera
+        // Estantes — topo e laterais
+        const posEstantes = [
+            [0,   0, 320,  16],  // parede topo
+            [0,   0,  16, 200],  // parede esquerda
+            [304, 0,  16, 200],  // parede direita
+            [16,  0, 288,  16],  // estantes topo linha 1
+            [16, 32, 144,  16],  // estante esquerda
+            [176, 32, 128, 16],  // estante direita
+            [16, 64, 144,  16],
+            [176, 64, 128, 16],
+        ];
+
+        posEstantes.forEach(([x, y, w, h]) => {
+            // AQUI ESTÁ A MELHORIA: Usamos tileSprite com a 'textura_estante' HD!
+            this.add.tileSprite(x + w/2, y + h/2, w, h, 'textura_estante').setDepth(2);
+            
+            const body = this.paredes.create(x + w/2, y + h/2, null)
+                .setVisible(false).refreshBody();
+            body.setSize(w, h);
+        });
+
+        // Mesa da professora (Usando a textura HD de mesa)
+        this.add.tileSprite(200, 130, 32, 16, 'textura_mesa').setDepth(2);
+
+        // Professora
+        this.professora = this.physics.add.sprite(200, 118, 'prof_down')
+            .setDepth(5).setImmovable(true);
+        this.professora.setDisplaySize(14, 14);
+
+        // Aluno 1 — dormindo na mesa
+        this.aluno1 = this.add.rectangle(80, 150, 8, 8, 0x4488cc).setDepth(3);
+        this.add.text(80, 141, 'z z z', {
+            fontFamily: 'monospace', fontSize: '4px', color: '#8888aa'
+        }).setOrigin(0.5).setDepth(4);
+
+        // Aluno 2 — no celular
+        this.aluno2 = this.add.rectangle(110, 150, 8, 8, 0xcc4444).setDepth(3);
+        this.add.text(110, 141, '📱', {
+            fontFamily: 'monospace', fontSize: '5px', color: '#888888'
+        }).setOrigin(0.5).setDepth(4);
+
+        // Porta do estoque (canto inferior direito)
+        this.portaEstoque = this.add.rectangle(284, 185, 24, 10, 0x5c3d1e)
+            .setDepth(3).setInteractive();
+        this.add.text(284, 178, 'ESTOQUE', {
+            fontFamily: 'monospace', fontSize: '4px', color: '#EF9F27'
+        }).setOrigin(0.5).setDepth(4);
+
+        // Lâmpada piscando
+        this.lampada = this.add.rectangle(160, 6, 4, 4, 0xffff88).setDepth(5);
+        this.tweens.add({
+            targets: this.lampada, alpha: 0.1,
+            duration: 2000, yoyo: true, repeat: -1, ease: 'Stepped'
+        });
+
+        // Mancha no teto
+        this.add.ellipse(60, 10, 40, 14, 0x3a2800, 0.5).setDepth(1);
+    }
+
+    // --- O RESTO DO SEU CÓDIGO (ESTOQUE, DIÁLOGOS, UPDATE) FICA INTACTO ---
+
+    _criarEstoque() {
+        this.children.each(c => {
+            if (c !== this.player && c !== this.dialogo.container && c !== this._hud)
+                c.destroy();
+        });
+        if (this.paredes) this.paredes.clear(true, true);
+
+        this.physics.world.setBounds(0, 0, 320, 200);
+        this.add.tileSprite(0, 0, 320, 200, 'piso_concreto').setOrigin(0).setDepth(0);
+        this.paredes = this.physics.add.staticGroup();
+
+        const parede = (x, y, w, h) => {
+            this.add.rectangle(x+w/2, y+h/2, w, h, 0x2a2a2a).setDepth(2);
+            const b = this.paredes.create(x+w/2, y+h/2, null).setVisible(false).refreshBody();
+            b.setSize(w, h);
+        };
+
+        parede(0, 0, 320, 12);   
+        parede(0, 188, 320, 12); 
+        parede(0, 0, 12, 200);   
+        parede(308, 0, 12, 200); 
+
+        this.physics.add.collider(this.player, this.paredes);
+
+        this._criarPilha(50, 80, 0, false);
+        this._criarPilha(140, 70, 1, false);
+        this._criarPilha(240, 90, 2, true);
+
+        this.zelador = this.physics.add.sprite(260, 155, 'zelador_right')
+            .setDepth(5).setImmovable(true).setDisplaySize(14, 14);
+        this.physics.add.collider(this.player, this.zelador);
+
+        this.tweens.add({
+            targets: this.zelador,
+            angle: -8, duration: 700, yoyo: true, repeat: -1, ease: 'Sine.easeInOut'
+        });
+
+        this.portaSaida = this.add.rectangle(28, 185, 24, 10, 0x5c3d1e).setDepth(3);
+        this.add.text(28, 178, '← SAIR', {
+            fontFamily: 'monospace', fontSize: '4px', color: '#7F77DD'
+        }).setOrigin(0.5).setDepth(4);
+
+        for (let i = 0; i < 12; i++) {
+            this.add.rectangle(
+                Phaser.Math.Between(20, 300), Phaser.Math.Between(20, 180),
+                Phaser.Math.Between(4, 10), Phaser.Math.Between(3, 6),
+                0xddddcc, 0.6
+            ).setDepth(1);
+        }
+
+        this._atualizarHUD('ESTOQUE DA BIBLIOTECA');
+    }
+
+    _criarPilha(x, y, index, especial) {
+        const caixa = this.add.rectangle(x, y, 22, 18, 0x7a5230).setDepth(3);
+        const caixa2 = this.add.rectangle(x - 6, y - 12, 16, 14, 0x5c3d1e).setDepth(4);
+        const livros = this.add.rectangle(x + 4, y - 8, 18, 10, 0x4a3828).setDepth(4);
+
+        [-4, 2, 8].forEach((dx, i) => {
+            const cor = [0xc0392b, 0x2980b9, 0x27ae60][i];
+            this.add.rectangle(x + dx, y - 8, 4, 10, cor).setDepth(5);
+        });
+
+        if (especial) {
+            this.livroMisterioso = this.add.rectangle(x + 10, y - 16, 8, 10, 0x1a0a04).setDepth(6);
+            this.tweens.add({ targets: this.livroMisterioso, alpha: 0.5, duration: 1400, yoyo: true, repeat: -1 });
+
+            const aura = this.add.graphics().setDepth(5);
+            aura.lineStyle(1, 0x3C3489, 0.6);
+            aura.strokeRect(x + 5, y - 21, 10, 12);
+            this.tweens.add({ targets: aura, alpha: 0.1, duration: 1000, yoyo: true, repeat: -1 });
+        }
+
+        const zona = this.add.rectangle(x, y - 8, 30, 30, 0x000000, 0).setDepth(7).setInteractive();
+        zona.setData('pilhaIndex', index);
+        zona.setData('especial', especial);
+
+        this._pilhaZonas = this._pilhaZonas || [];
+        this._pilhaZonas.push(zona);
+    }
+
+    _criarPlayer() {
+        this.player = new Player(this, 160, 160);
+        this.physics.add.collider(this.player, this.paredes);
+    }
+
+    _criarCamera() {
+        this.cameras.main.setBounds(0, 0, 320, 200);
         this.cameras.main.startFollow(this.player, true, 0.1, 0.1);
-        this.physics.world.setBounds(0, 0, width, height);
+        this.cameras.main.setZoom(2.5);
+    }
+
+    _criarHUD() {
+        this._hudBg = this.add.graphics().setDepth(90).setScrollFactor(0);
+        this._hudBg.fillStyle(0x0a0612, 0.9);
+        this._hudBg.fillRect(0, 0, 320, 14);
+
+        this._hudTitulo = this.add.text(4, 3, 'BIBLIOTECA DA ESCOLA', {
+            fontFamily: 'monospace', fontSize: '6px', color: '#EF9F27'
+        }).setDepth(91).setScrollFactor(0);
+
+        this._hudHint = this.add.text(160, 194, '', {
+            fontFamily: 'monospace', fontSize: '5px', color: '#7F77DD'
+        }).setOrigin(0.5, 1).setDepth(91).setScrollFactor(0);
+    }
+
+    _atualizarHUD(titulo) { this._hudTitulo && this._hudTitulo.setText(titulo); }
+    _setHint(txt) { this._hudHint && this._hudHint.setText(txt); }
+
+    _criarEventos() {
+        this.events.on('guardianVisionOn',  () => this._ativarVisao());
+        this.events.on('guardianVisionOff', () => this._desativarVisao());
+    }
+
+    _ativarVisao() {}
+    _desativarVisao() {}
+
+    _introDialogo() {
+        this.dialogo.show([
+            { speaker: 'Diário de Alex', text: 'Trabalho de história pra amanhã. A professora disse: fonte primária, não Wikipedia.' },
+            { speaker: 'Diário de Alex', text: 'A biblioteca da escola... menor do que eu lembrava. Cheiro de papel velho e... armador.' },
+        ], () => {});
+    }
+
+    _dialogoProfessora() {
+        if (this.dialogo.active) return;
+        this.player.freeze();
+        this.dialogo.show([
+            { speaker: 'Professora', text: 'Vai lá no fundo, tem um estoque. Talvez tenha uns livros mais antigos lá.' },
+            { speaker: 'Professora', text: 'Mas não bagunça.' },
+        ], () => this.player.unfreeze());
+    }
+
+    _dialogoAluno1() {
+        if (this.dialogo.active) return;
+        this.dialogo.show([{ speaker: 'Aluno', text: 'zzz...' }], () => {});
+    }
+
+    _dialogoAluno2() {
+        if (this.dialogo.active) return;
+        this.dialogo.show([{ speaker: 'Aluno', text: '...' }], () => {});
+    }
+
+    _dialogoZelador() {
+        if (this.dialogo.active) return;
+        this.dialogo.show([{ speaker: 'Zelador', text: '...' }], () => {});
+    }
+
+    _dialogoPilha(index) {
+        if (this.dialogo.active) return;
+        this.pilhasVistas[index] = true;
+
+        const textos = [
+            [
+                { speaker: 'Diário de Alex', text: 'Gramática de 1987, uma bíblia de bolso, ata de reunião de pais de 2003...' },
+                { speaker: 'Diário de Alex', text: 'Nada de histórico aqui.' },
+            ],
+            [
+                { speaker: 'Diário de Alex', text: 'Atlas com a União Soviética ainda no mapa. Um caderno esquecido de alguém.' },
+                { speaker: 'Diário de Alex', text: 'Nada útil.' },
+            ],
+            [
+                { speaker: 'Diário de Alex', text: 'Esta pilha é mais velha... livros de capa dura, cheirando a tempo.' },
+                { speaker: 'Diário de Alex', text: 'Tem um aqui no fundo, sem título. A lombada é de couro escuro. Estranho.' },
+            ],
+        ];
+
+        this.player.freeze();
+        this.dialogo.show(textos[index], () => {
+            this.player.unfreeze();
+            if (index === 2) this._revelarLivroMisterioso();
+        });
+    }
+
+    _revelarLivroMisterioso() {
+        if (this.livroAtivado) return;
+        this._setHint('[ESPAÇO] Pegar o livro estranho');
+        this.tweens.add({
+            targets: this.livroMisterioso, y: this.livroMisterioso.y - 3,
+            duration: 600, yoyo: true, repeat: 2,
+            onComplete: () => { this._podePegarLivro = true; }
+        });
+    }
+
+    _ativarLivro() {
+        if (this.livroAtivado || !this._podePegarLivro) return;
+        this.livroAtivado = true;
+        this._podePegarLivro = false;
+        this._setHint('');
+
+        this.player.freeze();
+        this.dialogo.show([
+            { speaker: 'Diário de Alex', text: 'Este livro... não tem título. A capa é de couro escuro.' },
+            { speaker: 'Diário de Alex', text: 'E está quente. Quente como a palma de uma mão.' },
+            { speaker: 'Diário de Alex', text: 'Primeira página: em branco. Segunda: em branco. Terceira...' },
+            { speaker: 'Livro',          text: '"Quem lê isto foi escolhido. O passado precisa de você."' },
+            { speaker: 'Diário de Alex', text: 'As páginas começaram a virar sozinhas. Tentei largar o livro.' },
+            { speaker: 'Diário de Alex', text: 'Não consegui.' },
+        ], () => this._sequenciaSiccao());
+    }
+
+    _sequenciaSiccao() {
+        this.cameras.main.shake(400, 0.012);
+        this.time.delayedCall(300, () => { this.cameras.main.flash(200, 60, 30, 140); });
+        this.time.delayedCall(700, () => {
+            this.tweens.add({
+                targets: this.cameras.main, zoom: 8, duration: 1000, ease: 'Power3',
+                onComplete: () => {
+                    this.cameras.main.fadeOut(400, 10, 5, 30);
+                    this.time.delayedCall(450, () => {
+                        this.scene.start('Hub', { diario: this.diario });
+                    });
+                }
+            });
+        });
+    }
+
+    _entrarEstoque() {
+        if (this.sala === 'estoque') return;
+        this.sala = 'estoque';
+
+        this.cameras.main.fadeOut(350, 0, 0, 0);
+        this.time.delayedCall(350, () => {
+            this._pilhaZonas = [];
+            this._criarEstoque();
+            this.player.setPosition(40, 170);
+            this.physics.add.collider(this.player, this.paredes);
+            this.cameras.main.fadeIn(350);
+            this.physics.add.collider(this.player, this.zelador);
+
+            this.time.delayedCall(400, () => {
+                this.dialogo.show([
+                    { speaker: 'Diário de Alex', text: 'Que bagunça...' },
+                    { speaker: 'Diário de Alex', text: 'O zelador está empurrando a água para baixo das caixas. Entendimento mútuo.' },
+                ], () => {});
+            });
+        });
+    }
+
+    _sairEstoque() {
+        if (this.sala === 'biblioteca') return;
+        this.sala = 'biblioteca';
+
+        this.cameras.main.fadeOut(300, 0, 0, 0);
+        this.time.delayedCall(300, () => {
+            this._pilhaZonas = [];
+            this._criarBiblioteca();
+            this.player.setPosition(270, 170);
+            this.physics.add.collider(this.player, this.paredes);
+            this.physics.add.collider(this.player, this.professora);
+            this.cameras.main.fadeIn(300);
+            this._atualizarHUD('BIBLIOTECA DA ESCOLA');
+        });
     }
 
     update() {
+        if (this.dialogo.active) {
+            if (this.input_h.justAction) this.dialogo.next();
+            this.player.freeze();
+            return;
+        }
+
         this.player.update();
+
+        const p  = this.player;
+        const px = p.x, py = p.y;
+
+        if (this.input_h.justVision) { p.toggleGuardianVision(!p.guardianVisionActive); }
+
+        if (this.sala === 'biblioteca') {
+            this._setHint('');
+
+            const distProf = Phaser.Math.Distance.Between(px, py, 200, 118);
+            if (distProf < 24) {
+                this._setHint('[ESPAÇO] Falar com a professora');
+                if (this.input_h.justAction) this._dialogoProfessora();
+            }
+            else if (Phaser.Math.Distance.Between(px, py, 80, 150) < 20) {
+                this._setHint('[ESPAÇO] Falar');
+                if (this.input_h.justAction) this._dialogoAluno1();
+            }
+            else if (Phaser.Math.Distance.Between(px, py, 110, 150) < 20) {
+                this._setHint('[ESPAÇO] Falar');
+                if (this.input_h.justAction) this._dialogoAluno2();
+            }
+            else if (Phaser.Math.Distance.Between(px, py, 284, 185) < 20) {
+                this._setHint('[ESPAÇO] Entrar no estoque');
+                if (this.input_h.justAction) this._entrarEstoque();
+            }
+        }
+        else if (this.sala === 'estoque') {
+            this._setHint('');
+
+            if (Phaser.Math.Distance.Between(px, py, 260, 155) < 22) {
+                this._setHint('[ESPAÇO] Falar');
+                if (this.input_h.justAction) this._dialogoZelador();
+            }
+            else if (px < 40 && py > 165) {
+                this._setHint('[ESPAÇO] Voltar para a biblioteca');
+                if (this.input_h.justAction) this._sairEstoque();
+            }
+            else if (this._pilhaZonas) {
+                let perto = false;
+                if (Phaser.Math.Distance.Between(px, py, 50, 80) < 28) {
+                    perto = true;
+                    this._setHint('[ESPAÇO] Examinar pilha de livros');
+                    if (this.input_h.justAction) this._dialogoPilha(0);
+                }
+                else if (Phaser.Math.Distance.Between(px, py, 140, 70) < 28) {
+                    perto = true;
+                    this._setHint('[ESPAÇO] Examinar pilha de livros');
+                    if (this.input_h.justAction) this._dialogoPilha(1);
+                }
+                else if (Phaser.Math.Distance.Between(px, py, 240, 90) < 28) {
+                    perto = true;
+                    if (this._podePegarLivro) {
+                        this._setHint('[ESPAÇO] Pegar o livro estranho');
+                        if (this.input_h.justAction) this._ativarLivro();
+                    } else {
+                        this._setHint('[ESPAÇO] Examinar pilha de livros');
+                        if (this.input_h.justAction) this._dialogoPilha(2);
+                    }
+                }
+                if (!perto) this._setHint('');
+            }
+        }
     }
 }

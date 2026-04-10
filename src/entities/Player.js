@@ -6,6 +6,13 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
         scene.physics.add.existing(this);
         this.setCollideWorldBounds(true);
 
+        // --- CORREÇÕES ADICIONADAS AQUI ---
+        // 1. Z-Index: Garante que o Alex fique por cima do chão e móveis
+        this.setDepth(10); 
+        // 2. Escala: Reduz o tamanho de 68px para caber na câmera com zoom
+        this.setScale(0.45); 
+        // ----------------------------------
+
         // Hitbox nos pés: permite que a cabeça do Alex passe 'por trás' de estantes
         this.body.setSize(24, 16);
         this.body.setOffset(22, 52);
@@ -21,6 +28,12 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
             S: Phaser.Input.Keyboard.KeyCodes.S,
             D: Phaser.Input.Keyboard.KeyCodes.D
         });
+        
+        // Controle de setinhas adicionado para compatibilidade
+        this.cursors = scene.input.keyboard.createCursorKeys();
+        
+        // Garante que inicie com animação
+        this.play('idle-down');
     }
 
     createAnims() {
@@ -55,11 +68,12 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
         this.body.setVelocity(0);
         let vx = 0, vy = 0;
 
-        if (this.wasd.A.isDown) { vx = -this.speed; this.facing = 'left'; }
-        else if (this.wasd.D.isDown) { vx = this.speed; this.facing = 'right'; }
+        // Suporte para WASD e Setas Direcionais
+        if (this.wasd.A.isDown || this.cursors.left.isDown) { vx = -this.speed; this.facing = 'left'; }
+        else if (this.wasd.D.isDown || this.cursors.right.isDown) { vx = this.speed; this.facing = 'right'; }
         
-        if (this.wasd.W.isDown) { vy = -this.speed; this.facing = 'up'; }
-        else if (this.wasd.S.isDown) { vy = this.speed; this.facing = 'down'; }
+        if (this.wasd.W.isDown || this.cursors.up.isDown) { vy = -this.speed; this.facing = 'up'; }
+        else if (this.wasd.S.isDown || this.cursors.down.isDown) { vy = this.speed; this.facing = 'down'; }
 
         if (vx !== 0 && vy !== 0) { vx *= 0.7071; vy *= 0.7071; }
 
@@ -70,5 +84,11 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
         } else {
             this.play(`idle-${this.facing}`, true);
         }
+    }
+
+    // Função restaurada para não dar erro na BibliotecaScene
+    toggleGuardianVision(active) {
+        this.guardianVisionActive = active;
+        active ? this.setTint(0x7F77DD) : this.clearTint();
     }
 }
