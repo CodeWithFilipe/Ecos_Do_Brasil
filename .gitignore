@@ -1,3 +1,74 @@
-```javascript
+```
+# Dependencies
+node_modules/
 
+# Build artifacts
+dist/
+build/
+*.js.map
+
+# Logs and temp files
+*.log
+*.tmp
+
+# Environment
+.env
+.env.local
+*.env.*
+
+# Editors
+.vscode/
+.idea/
+
+# Coverage reports
+coverage/
+htmlcov/
+*.coverage
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Distribution / packaging
+.Python
+*.egg-info/
+.eggs/
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+.junit.xml
+.testreport.xml
+
+# MyPy cache
+.mypy_cache/
+.pyre/
+.pytype/
+
+# IDE specific
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Compiled binary files
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Compressed archives
+*.zip
+*.tar.gz
+*.tar.bz2
+*.tar.xz
+*.7z
+*.rar
+*.gz
+*.bz2
+*.xz
+*.zst
 ```

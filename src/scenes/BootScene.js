@@ -2,6 +2,18 @@ export default class BootScene extends Phaser.Scene {
     constructor() { super('Boot'); }
 
     preload() {
+        // ════════════════════════════════════════
+        // INICIALIZAR GERENCIADOR DE ÁUDIO
+        // ════════════════════════════════════════
+        import('./audio/SoundManager.js').then(module => {
+            const SoundManager = module.default;
+            this.soundManager = new SoundManager(this);
+            // Salvar referência global para outras cenas
+            window._soundManager = this.soundManager;
+        }).catch(err => {
+            console.warn('SoundManager não carregado:', err);
+        });
+
         // ── PLAYER ──────────────────────────────────────────────
         // Spritesheet 5 colunas × 4 linhas (Down, Up, Left, Right)
         // Frames por linha: 0,1,2 = walk | 3 = idle | 4 = extra
@@ -20,6 +32,9 @@ export default class BootScene extends Phaser.Scene {
         this.load.image('zelador_down',  'assets/sprites/zelador/south.png');
         this.load.image('zelador_right', 'assets/sprites/zelador/east.png');
 
+        // ── CLIO ─────────────────────────────────────────────────
+        this.load.image('clio_portrait', 'assets/sprites/clio/portrait.png');
+
         // ── CENÁRIO — BIBLIOTECA ─────────────────────────────────
         this.load.image('piso_madeira',  'assets/textures/piso_madeira.png');
         this.load.image('piso_concreto', 'assets/textures/piso_concreto.png');
@@ -35,9 +50,6 @@ export default class BootScene extends Phaser.Scene {
         this.load.image('item_confissao', 'assets/sprites/items/confissao.png');
         this.load.image('item_mapa',      'assets/sprites/items/mapa.png');
         this.load.image('item_fragmento', 'assets/sprites/items/fragmento.png');
-
-        // ── CLIO ─────────────────────────────────────────────────
-        this.load.image('clio_portrait', 'assets/sprites/clio/portrait.png');
 
         // ── UI ───────────────────────────────────────────────────
         this.load.image('ui_nevoa', 'assets/ui/nevoa_overlay.png');
@@ -58,7 +70,9 @@ export default class BootScene extends Phaser.Scene {
     create() {
         // Gera texturas procedurais para assets que não existem em disco
         this._gerarTexturasFallback();
-        this.scene.start('Biblioteca');
+        
+        // Iniciar no Menu Principal
+        this.scene.start('MenuPrincipal');
     }
 
     _gerarTexturasFallback() {

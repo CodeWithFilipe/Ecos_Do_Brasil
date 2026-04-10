@@ -16,12 +16,23 @@
 //       DialogueManager.js
 //       Diario.js
 //       InputHandler.js
+//     menu/
+//       MenuPrincipal.js
+//       Historia.js
+//       Configuracoes.js
+//       Creditos.js
+//     audio/
+//       SoundManager.js
 // ─────────────────────────────────────────────────────────────
 
 import BootScene       from './scenes/BootScene.js';
 import BibliotecaScene from './scenes/fases/biblioteca/BibliotecaScene.js';
 import HubScene        from './scenes/fases/hub/HubScene.js';
 import VilaRicaScene   from './scenes/fases/vila_rica/VilaRicaScene.js';
+import MenuPrincipal   from './scenes/menu/MenuPrincipal.js';
+import Historia        from './scenes/menu/Historia.js';
+import Configuracoes   from './scenes/menu/Configuracoes.js';
+import Creditos        from './scenes/menu/Creditos.js';
 
 const config = {
     type: Phaser.AUTO,
@@ -44,7 +55,8 @@ const config = {
     },
 
     // Boot sempre primeiro — carrega todos os assets antes das cenas
-    scene: [BootScene, BibliotecaScene, HubScene, VilaRicaScene]
+    // MenuPrincipal é a cena inicial do jogo
+    scene: [BootScene, MenuPrincipal, Historia, Configuracoes, Creditos, BibliotecaScene, HubScene, VilaRicaScene]
 };
 
 new Phaser.Game(config);
