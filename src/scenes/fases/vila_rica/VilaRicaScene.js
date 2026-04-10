@@ -24,7 +24,7 @@ export default class VilaRicaScene extends Phaser.Scene {
 
     create() {
         // Mapa colonial: 480×240 (mais largo que a câmera 320×200)
-        const MW = 480, MH = 240;
+        const MW = 800, MH = 600;
         this.physics.world.setBounds(0, 0, MW, MH);
 
         this.input_h = new InputHandler(this);

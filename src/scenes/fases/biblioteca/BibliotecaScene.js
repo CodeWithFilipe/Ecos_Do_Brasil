@@ -17,7 +17,7 @@ export default class BibliotecaScene extends Phaser.Scene {
         // ── Mapa lógico: 320×200 (mesma resolução do jogo) ───────
         // Biblioteca ocupa a cena inteira. Estoque é outra "sala"
         // carregada com fadeOut/fadeIn sem trocar de Scene.
-        this.physics.world.setBounds(0, 0, 320, 200);
+        this.physics.world.setBounds(0, 0, 800, 600);
 
         // Estado da cena
         this.sala          = 'biblioteca';  // 'biblioteca' | 'estoque'
