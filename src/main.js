@@ -21,7 +21,7 @@
 import BootScene       from './scenes/BootScene.js';
 import BibliotecaScene from './scenes/fases/biblioteca/BibliotecaScene.js';
 import HubScene        from './scenes/fases/hub/HubScene.js';
-import VilaRicaScene   from './scenes/fases/vilarica/VilaRicaScene.js';
+import VilaRicaScene   from './scenes/fases/vila_rica/VilaRicaScene.js';
 
 const config = {
     type: Phaser.AUTO,
