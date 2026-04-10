@@ -5,8 +5,8 @@
 // Recebe { diario } via scene.start('Hub', { diario })
 // ─────────────────────────────────────────────────────────────
 
-import DialogueManager from '../../../systems/DialogueManager.js';
-import InputHandler    from '../../../systems/InputHandler.js';
+import DialogueManager from '../../../ui/DialogueManager.js';
+import InputHandler    from '../../../core/InputHandler.js';
 
 export default class HubScene extends Phaser.Scene {
     constructor() { super('Hub'); }
