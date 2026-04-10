@@ -7,8 +7,8 @@
 // ─────────────────────────────────────────────────────────────
 
 import Player          from '../../../entities/Player.js';
-import DialogueManager from '../../../systems/DialogueManager.js';
-import InputHandler    from '../../../systems/InputHandler.js';
+import DialogueManager from '../../../ui/DialogueManager.js';
+import InputHandler    from '../../../core/InputHandler.js';
 
 export default class VilaRicaScene extends Phaser.Scene {
     constructor() { super('VilaRica'); }
