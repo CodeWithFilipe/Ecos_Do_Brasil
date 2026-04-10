@@ -6,7 +6,7 @@
 // ─────────────────────────────────────────────────────────────
 
 import Player          from '../../../entities/Player.js';
-import DialogueManager from '../../../systems/DialogueManager.js';
+import DialogueManager from '../../../src/DialogueManager.js';
 import Diario          from '../../../systems/Diario.js';
 import InputHandler    from '../../../systems/InputHandler.js';
 
