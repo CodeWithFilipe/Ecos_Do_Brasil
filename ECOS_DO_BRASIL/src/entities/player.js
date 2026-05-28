@@ -14,16 +14,26 @@ export class Player {
         
         this.spriteSheet = spriteSheet;
         
-        // Configuração da tesoura calibrada por você
+        // O tamanho da tesoura que você calibrou
         this.frameW = 32; 
         this.frameH = 32; 
         this.maxFrames = 4; 
         
         // =========================================================
-        // 🛠️ MODO DEBUG DESLIGADO 🛠️
+        // 👕 MATRIZ DO PERSONAGEM COMPLETO (SISTEMA DE ROUPAS) 👕
         // =========================================================
-        // O valor agora é "false". As linhas de depuração sumirão da tela.
-        this.debugMode = false;
+        // Geralmente, cada peça de roupa ocupa 4 linhas na imagem 
+        // (uma para cada direção: Baixo, Cima, Esquerda, Direita).
+        // Aqui você coloca a LINHA INICIAL de cada peça de roupa.
+        this.layers = [
+            0,  // 1ª Camada: O Corpo base (começa na linha 0)
+            
+            // Para adicionar roupas, basta descobrir em qual linha elas começam 
+            // na sua imagem original e tirar as duas barras (//) abaixo:
+            
+            // 4,  // 2ª Camada: A calça ou camisa (ex: começa na linha 4)
+            // 8   // 3ª Camada: O cabelo ou chapéu (ex: começa na linha 8)
+        ];
         
         // Controle de Animação
         this.animFrame = 0;
@@ -83,29 +93,20 @@ export class Player {
         }
 
         let sx = this.animFrame * this.frameW;
-        let sy = this.facing * this.frameH;
 
-        ctx.drawImage(
-            this.spriteSheet, 
-            sx, sy, this.frameW, this.frameH, 
-            this.x, this.y, this.width, this.height 
-        );
+        // O SEGREDO ESTÁ AQUI: Um laço de repetição (for)
+        // Ele vai desenhar o corpo, depois a roupa, depois o cabelo... 
+        // empilhando todos exatamente no mesmo lugar.
+        for (let i = 0; i < this.layers.length; i++) {
+            
+            // A posição Y da tesoura = (Direção que o boneco olha) + (Linha da Peça de Roupa)
+            let sy = (this.facing + this.layers[i]) * this.frameH;
 
-        if (this.debugMode) {
-            ctx.drawImage(this.spriteSheet, 0, 0);
-            ctx.strokeStyle = 'rgba(255, 0, 0, 0.6)';
-            ctx.lineWidth = 1;
-            for (let c = 0; c <= this.spriteSheet.width; c += this.frameW) {
-                ctx.beginPath(); ctx.moveTo(c, 0); ctx.lineTo(c, this.spriteSheet.height); ctx.stroke();
-            }
-            for (let r = 0; r <= this.spriteSheet.height; r += this.frameH) {
-                ctx.beginPath(); ctx.moveTo(0, r); ctx.lineTo(this.spriteSheet.width, r); ctx.stroke();
-            }
-            ctx.strokeStyle = 'rgba(0, 255, 0, 1)';
-            ctx.lineWidth = 2;
-            ctx.strokeRect(sx, sy, this.frameW, this.frameH);
-            ctx.strokeStyle = 'rgba(255, 255, 0, 0.8)';
-            ctx.strokeRect(this.x, this.y, this.width, this.height);
+            ctx.drawImage(
+                this.spriteSheet, 
+                sx, sy, this.frameW, this.frameH, 
+                this.x, this.y, this.width, this.height 
+            );
         }
     }
 }
