@@ -1,0 +1,24 @@
+ESSE CÓDIGO FOI FEITO EM JS E HTML 
+
+ESTRUTURA DE PASTAS:
+
+/ecos-do-brasil
+│
+├── index.html
+├── style.css
+│
+├── /assets             
+│   ├── /sprites        (Aqui entrarão alex.png, clio.png, dompedro.png, etc.)
+│   └── /maps           (Aqui entrarão os JSONs do Tiled: biblioteca.json, vilarica.json, etc.)
+│
+└── /src                
+    ├── main.js         (Ponto de entrada e Game Loop)
+    ├── /core
+    │   └── Input.js    (Gerenciador de teclado)
+    ├── /entities
+    │   ├── Player.js   (Lógica do Alex: andar e interagir)
+    │   └── NPC.js      (Lógica para Clio e figuras históricas)
+    └── /world
+        └── Map.js      (Gerenciador de colisões e renderização do chão)
+
+        
