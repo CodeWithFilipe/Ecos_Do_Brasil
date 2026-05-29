@@ -1,29 +1,27 @@
 /**
  * Player — Alex
  *
- * Spritesheet: Cute Fantasy Free (Player.png)
- * Layout: 192×320 → 6 colunas × 10 linhas de 32×32
+ * Spritesheet: Cute Fantasy Free (Player.png — 192×320)
+ * Layout: 6 colunas × 10 linhas de 32×32
  *
- *   Linhas 0-1: walk down   (6 frames cada)
- *   Linhas 2-3: walk right  (6 frames cada)
- *   Linhas 4-5: walk up     (6 frames cada)
- *   Linhas 6-7: walk left   (6 frames cada)
- *   Linhas 8-9: extras
- *
- * O mapeamento usa PARES de linhas (row0 = andar, row1 = variação) por direção.
- * facing → par de linhas da spritesheet.
+ *   Row 0: Walk Down  (6 frames)   facing=0
+ *   Row 1: Walk Up    (6 frames)   facing=1
+ *   Row 2: Walk Right (6 frames)   facing=3
+ *   Row 3: Walk Left  (6 frames)   facing=2
+ *   Row 4-7: Idle variants
+ *   Row 8-9: Especiais
  */
 export class Player {
 
-    // Mapeamento: facing → primeira linha na spritesheet
-    // facing: 0=down  1=up  2=left  3=right
-    static DIR_ROW = [0, 4, 6, 2];   // down→0, up→4, left→6, right→2
+    // facing → row na spritesheet
+    //   0=down→row0, 1=up→row1, 2=left→row3, 3=right→row2
+    static DIR_ROW = [0, 1, 3, 2];
 
     constructor(x, y, config = {}) {
         this.x = x;
         this.y = y;
 
-        // Hitbox de colisão (caixa pequena nos pés)
+        // Hitbox (caixa nos pés)
         this.width  = config.hitboxW || 10;
         this.height = config.hitboxH || 10;
 
@@ -43,10 +41,10 @@ export class Player {
         this.animTimer = 0;
         this.animSpeed = config.animSpeed || 0.12;
         this.isMoving  = false;
+        this.hasMoved  = false;   // flag para tutorial
 
         this.fallbackColor = config.fallbackColor || '#3a7898';
 
-        // Offset: sprite centralizado sobre hitbox, alinhado pelos pés
         this._recalcOffsets();
     }
 
@@ -55,7 +53,6 @@ export class Player {
         this.spriteOffsetY = -(this.frameH - this.height);
     }
 
-    /** Troca spritesheet em runtime. */
     setSpriteSheet(img, config = {}) {
         this.spriteSheet = img;
         if (config.frameW)    this.frameW    = config.frameW;
@@ -72,10 +69,10 @@ export class Player {
         if (input.isDown('ArrowLeft')  || input.isDown('KeyA')) { dx = -1; this.facing = 2; }
         if (input.isDown('ArrowRight') || input.isDown('KeyD')) { dx =  1; this.facing = 3; }
 
-        // Normalizar diagonal
         if (dx !== 0 && dy !== 0) { dx *= 0.7071; dy *= 0.7071; }
 
         this.isMoving = (dx !== 0 || dy !== 0);
+        if (this.isMoving) this.hasMoved = true;
 
         if (this.isMoving) {
             const mx = dx * this.speed * dt;
@@ -91,27 +88,24 @@ export class Player {
                 this.y += my;
             }
 
-            // Animação de caminhada
             this.animTimer += dt;
             if (this.animTimer >= this.animSpeed) {
                 this.animFrame = (this.animFrame + 1) % this.maxFrames;
                 this.animTimer = 0;
             }
         } else {
-            // Parado: frame 0 (idle)
             this.animFrame = 0;
             this.animTimer = 0;
         }
     }
 
-    /** Hitbox de interação na frente do personagem. */
     getInteractionBox() {
         const size = 14;
         let ix = this.x, iy = this.y;
-        if (this.facing === 0) iy += this.height;     // baixo
-        if (this.facing === 1) iy -= size;             // cima
-        if (this.facing === 2) ix -= size;             // esquerda
-        if (this.facing === 3) ix += this.width;       // direita
+        if (this.facing === 0) iy += this.height;
+        if (this.facing === 1) iy -= size;
+        if (this.facing === 2) ix -= size;
+        if (this.facing === 3) ix += this.width;
         return { x: ix, y: iy, width: size, height: size };
     }
 
@@ -120,7 +114,6 @@ export class Player {
         const drawY = this.y + this.spriteOffsetY;
 
         if (this.spriteSheet && this.spriteSheet.complete && this.spriteSheet.naturalWidth > 0) {
-            // Usar mapeamento de direção → linha da spritesheet
             const row = Player.DIR_ROW[this.facing] || 0;
             const sx = this.animFrame * this.frameW;
             const sy = row * this.frameH;
@@ -133,7 +126,6 @@ export class Player {
             return;
         }
 
-        // Fallback: retângulo colorido
         ctx.fillStyle = this.fallbackColor;
         ctx.fillRect(this.x, this.y, this.width, this.height);
     }
