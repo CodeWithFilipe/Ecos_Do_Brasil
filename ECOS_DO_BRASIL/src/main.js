@@ -293,9 +293,9 @@ async function init() {
         sprites : playerSprites,
         frameW, frameH,
         maxFrames : 1,     // idle = 1 frame por PNG
-        hitboxW   : Math.round(frameW * 0.35),
-        hitboxH   : Math.round(frameH * 0.25),
-        speed     : 80,
+        hitboxW   : 10,
+        hitboxH   : 10,
+        speed     : 90,
     });
 
     dialogueBox = new DialogueBox(canvas, ctx);

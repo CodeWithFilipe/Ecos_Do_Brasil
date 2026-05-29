@@ -151,8 +151,8 @@ export class Map {
     // ─────────────────────────────────────────────
 
     isColliding(x, y, w, h) {
-        // Limites do mapa
-        if (x < 0 || y < 0 || x + w > this.widthPx || y + h > this.heightPx) return true;
+        // Limites do mapa - agora mais permissivo para evitar travamento no spawn
+        if (x < -32 || y < -32 || x + w > this.widthPx + 32 || y + h > this.heightPx + 32) return true;
 
         // Retângulos (AABB)
         for (const r of this.collisionRects) {
