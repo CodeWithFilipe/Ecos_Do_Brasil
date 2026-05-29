@@ -76,10 +76,27 @@ export class DialogueBox {
         ctx.lineWidth = 2;
         ctx.strokeRect(x, y, w, h);
 
-        // Nome do Personagem
-        ctx.fillStyle = '#EF9F27'; // Cor dourada
+        // Nome do Personagem (Cores temáticas)
+        let nameColor = '#EF9F27'; // Padrão
+        const spk = this.speaker.toLowerCase();
+        if (spk === 'alex') nameColor = '#FFFFFF';
+        else if (spk === 'clio') nameColor = '#F5C518';
+        else if (spk === 'diário') nameColor = '#A0D8EF';
+        else if (spk === 'tiradentes') nameColor = '#C8411A';
+        else if (spk.includes('névoa') || spk === '???') nameColor = '#999999';
+
+        ctx.fillStyle = nameColor;
         ctx.font = 'bold 10px monospace';
         ctx.fillText(this.speaker.toUpperCase(), x + 8, y + 16);
+
+        // Indicador de Avanço (Blink)
+        if (this.currentChar >= this.currentLine.length) {
+            const blink = Math.floor(Date.now() / 300) % 2 === 0;
+            if (blink) {
+                ctx.fillStyle = '#FFFFFF';
+                ctx.fillText('▶', x + w - 16, y + h - 10);
+            }
+        }
 
         // O Texto
         ctx.fillStyle = '#FFFFFF';

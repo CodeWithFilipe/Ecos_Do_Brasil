@@ -8,6 +8,13 @@ import { Interactable }  from './entities/Interactable.js';
 import { DialogueBox }   from './ui/DialogueBox.js';
 import { Map }           from './world/Map.js';
 
+// Novos Sistemas Narrativos
+import { gameState }            from './state/GameState.js';
+import { HUD }                  from './ui/HUD.js';
+import { DiaryOverlay }         from './ui/DiaryOverlay.js';
+import { InvestigationBoard }   from './ui/InvestigationBoard.js';
+import { GuardianVisionEffect } from './ui/GuardianVisionEffect.js';
+
 // ─────────────────────────────────────────────────────────────
 // CANVAS & SISTEMAS GLOBAIS
 // ─────────────────────────────────────────────────────────────
@@ -26,10 +33,23 @@ let lastTime     = performance.now();
 let spaceWasDown = false;
 let gameReady    = false;
 
+// Instâncias de UI
+let hud = null;
+let diary = null;
+let investigationBoard = null;
+let guardianVision = null;
+
 // Debug: F3 = hitboxes de colisão
 let debugMode = false;
 window.addEventListener('keydown', e => {
     if (e.code === 'F3') { debugMode = !debugMode; e.preventDefault(); }
+    if (e.code === 'Tab') { 
+        e.preventDefault();
+        if (diary) diary.toggle(); 
+    }
+    if (e.code === 'KeyV' || e.code === 'KeyQ') {
+        if (guardianVision && !dialogueBox.active) guardianVision.toggle();
+    }
 });
 
 // ─────────────────────────────────────────────────────────────
@@ -111,61 +131,129 @@ const SCENES = {
 
     praca: {
         file : 'praca.tmj',
-        setup(map) {
+        setup(map, spawnX, spawnY) {
             map.setProceduralPreset('praca');
-            // Jogador no spawn do mapa (clampado para ficar dentro dos limites)
-            const spawn = clampSpawn(map, map.spawnPoint.x, map.spawnPoint.y);
+            gameState.currentAct = 'ato1';
+            const sx = spawnX !== undefined ? spawnX : map.spawnPoint.x;
+            const sy = spawnY !== undefined ? spawnY : map.spawnPoint.y;
+            const spawn = clampSpawn(map, sx, sy);
             alex.x = spawn.x;
             alex.y = spawn.y;
             interactables = [];
 
+            // Função helper para criar prova
+            const addProof = (act, proofId, interactable) => {
+                const oldOnComplete = interactable.onInteractComplete;
+                interactable.proof = proofId;
+                interactable.onInteractComplete = () => {
+                    const isNew = gameState.findProof(act, proofId);
+                    if (isNew) {
+                        gameState.addDiaryEntry(`Encontrei uma nova prova: ${proofId}.`);
+                        if (gameState.hasAllProofsForAct(act)) {
+                            // Todas as provas encontradas!
+                            setTimeout(() => {
+                                investigationBoard.show(act, () => {
+                                    // Após fechar o mural, atualiza o mapa/estátua
+                                    loadScene('praca');
+                                });
+                            }, 500);
+                        }
+                    }
+                    if (oldOnComplete) oldOnComplete();
+                };
+                interactables.push(interactable);
+            };
+
+            const isSolved = gameState.fragments.includes(1);
+
+            // NPCs Distorcidos da Praça
+            if (!isSolved) {
+                interactables.push(new Interactable(150, 180, {
+                    name: 'Comerciante', distorted: true, width: 16, height: 16,
+                    dialogueLines: [
+                        { speaker: 'Comerciante (Névoa)', text: 'O alferes quer manter tudo como está...' },
+                        { speaker: 'Alex', text: 'Tem algo errado nisso.' }
+                    ]
+                }));
+                interactables.push(new Interactable(250, 150, {
+                    name: 'Padre', distorted: true, width: 16, height: 16,
+                    dialogueLines: [
+                        { speaker: 'Padre (Névoa)', text: 'Os planos de Tiradentes eram para fortalecer a Coroa.' }
+                    ]
+                }));
+            } else {
+                interactables.push(new Interactable(150, 180, {
+                    name: 'Comerciante', width: 16, height: 16,
+                    dialogueLines: [{ speaker: 'Comerciante', text: 'Tiradentes pregava a liberdade.' }]
+                }));
+            }
+
             // Estátua de Tiradentes
             const estatua = map.mapObjects.find(o => o.name === 'estatua_tiradentes');
             if (estatua) {
-                interactables.push(new Interactable(estatua.x, estatua.y, {
-                    name  : 'Estátua de Tiradentes',
-                    color : '#C8A96E',
-                    width : estatua.width, height: estatua.height,
-                    glow  : false,
-                    dialogueLines: [
-                        { speaker: 'Alex',       text: 'Tiradentes... Um mártir da Inconfidência Mineira.' },
-                        { speaker: 'Tiradentes', text: '"A liberdade ainda que tardia." — meu lema.' },
-                        { speaker: 'Clio',       text: 'É aqui que tudo começa, Alex. Esta praça guarda ecos de 1789.' }
-                    ]
-                }));
+                if (isSolved) {
+                    interactables.push(new Interactable(estatua.x, estatua.y, {
+                        name  : 'Estátua de Tiradentes', color : '#C8A96E',
+                        width : estatua.width, height: estatua.height, glow  : false,
+                        dialogueLines: [
+                            { speaker: 'Alex', text: 'A placa mudou: "Mártir da Independência Brasileira".' },
+                            { speaker: 'Tiradentes', text: '"A liberdade ainda que tardia." — meu lema.' },
+                            { speaker: 'Clio', text: 'A história foi restaurada, Alex. A Inconfidência era uma revolução real.' }
+                        ]
+                    }));
+                } else {
+                    interactables.push(new Interactable(estatua.x, estatua.y, {
+                        name  : 'Estátua Distorcida', color : '#FF3333',
+                        width : estatua.width, height: estatua.height, distorted: true, glow: true,
+                        dialogueLines: [
+                            { speaker: 'Alex', text: 'A placa diz "Defensor da Monarquia Portuguesa"? Isso está errado!' },
+                            { speaker: 'Clio', text: 'A Névoa o transformou. Precisamos de três provas para limpar essa distorção.' }
+                        ]
+                    }));
+                }
             }
 
-            // Portais para outras cenas
+            // Prova 1: Casa do Poeta
+            const portaPoeta = map.mapObjects.find(o => o.name === 'porta_poeta');
+            if (portaPoeta) {
+                if (isSolved) {
+                    interactables.push(new Interactable(portaPoeta.x, portaPoeta.y, {
+                        name: 'porta_poeta', color: '#5a8a5a', width: portaPoeta.width, height: portaPoeta.height, glow: false,
+                        dialogueLines: [{ speaker: 'Alex', text: 'A porta está trancada.' }]
+                    }));
+                } else {
+                    addProof('ato1', 'carta_gonzaga', new Interactable(portaPoeta.x, portaPoeta.y, {
+                        name: 'porta_poeta', color: '#5a8a5a', width: portaPoeta.width, height: portaPoeta.height, glow: true,
+                        dialogueLines: [
+                            { speaker: 'Alex', text: 'Encontrei uma carta escondida no portal da casa do poeta.' },
+                            { speaker: 'Clio', text: 'Fragmento encontrado. Gonzaga escreve que o alferes era o mais ardente na causa da independência.' },
+                            { speaker: 'Alex', text: 'Isso contradiz o que as pessoas na praça dizem!' }
+                        ]
+                    }));
+                }
+            }
+
+            // Prova 3: Taverna
+            const portaTaverna = map.mapObjects.find(o => o.name === 'porta_taverna');
+            if (portaTaverna) {
+                if (!isSolved && !gameState.hasProof('ato1', 'mapa_conspiracao')) {
+                    addProof('ato1', 'mapa_conspiracao', new Interactable(portaTaverna.x, portaTaverna.y, {
+                        name: 'porta_taverna', color: '#7a4a2a', width: portaTaverna.width, height: portaTaverna.height, glow: true,
+                        dialogueLines: [
+                            { speaker: 'Alex', text: 'Sob um assoalho solto... um mapa marcado com reuniões secretas.' },
+                            { speaker: 'Clio', text: 'A Inconfidência não era briga de impostos. Era uma revolução para libertar o Brasil e abolir a escravidão.' }
+                        ]
+                    }));
+                }
+            }
+
+            // Portal Igreja (Para buscar Prova 2)
             const portaIgreja = map.mapObjects.find(o => o.name === 'porta_igreja');
             if (portaIgreja) {
                 interactables.push(new Interactable(portaIgreja.x, portaIgreja.y, {
-                    name: 'porta_igreja', color: '#8B6914',
-                    width: portaIgreja.width, height: portaIgreja.height,
-                    glow: true,
+                    name: 'porta_igreja', color: '#8B6914', width: portaIgreja.width, height: portaIgreja.height, glow: true,
                     dialogueLines: [{ speaker: 'Alex', text: '[Entrar na Igreja]' }],
                     onInteractComplete: () => loadScene('igreja')
-                }));
-            }
-
-            const portaPoeta = map.mapObjects.find(o => o.name === 'porta_poeta');
-            if (portaPoeta) {
-                interactables.push(new Interactable(portaPoeta.x, portaPoeta.y, {
-                    name: 'porta_poeta', color: '#5a8a5a',
-                    width: portaPoeta.width, height: portaPoeta.height,
-                    glow: true,
-                    dialogueLines: [{ speaker: 'Alex', text: '[Entrar na Casa do Poeta]' }],
-                    onInteractComplete: () => loadScene('biblioteca')
-                }));
-            }
-
-            const portaTaverna = map.mapObjects.find(o => o.name === 'porta_taverna');
-            if (portaTaverna) {
-                interactables.push(new Interactable(portaTaverna.x, portaTaverna.y, {
-                    name: 'porta_taverna', color: '#7a4a2a',
-                    width: portaTaverna.width, height: portaTaverna.height,
-                    glow: true,
-                    dialogueLines: [{ speaker: 'Alex', text: '[Entrar na Taverna]' }],
-                    onInteractComplete: () => console.log('TODO: taverna')
                 }));
             }
         }
@@ -173,42 +261,61 @@ const SCENES = {
 
     biblioteca: {
         file : 'biblioteca.tmj',
-        setup(map) {
+        setup(map, spawnX, spawnY) {
             map.setProceduralPreset('biblioteca');
-            const spawn = clampSpawn(map, map.spawnPoint.x, map.spawnPoint.y);
+            gameState.currentAct = 'prologo';
+            const sx = spawnX !== undefined ? spawnX : map.spawnPoint.x;
+            const sy = spawnY !== undefined ? spawnY : map.spawnPoint.y;
+            const spawn = clampSpawn(map, sx, sy);
             alex.x = spawn.x;
             alex.y = spawn.y;
             interactables = [];
 
             // Livro misterioso
             const diario = map.mapObjects.find(o => o.name === 'item_diario');
-            interactables.push(new Interactable(
-                diario?.x || 150, diario?.y || 80, {
-                    name  : 'Livro sem título',
-                    color : '#4a2808',
-                    width : diario?.width  || 16,
-                    height: diario?.height || 16,
-                    isItem: true, glow: true,
-                    dialogueLines: [
-                        { speaker: 'Alex', text: 'Esse livro não tem título. Está emitindo um calor estranho...' },
-                        { speaker: '???',  text: '"Quem lê isto foi escolhido. O passado precisa de você."' },
-                        { speaker: 'Alex', text: 'As letras estão brilhando!' }
-                    ],
-                    onInteractComplete: () => {
-                        sceneManager.transitionTo('encontro_clio', () => {
-                            // Clio aparece ao lado do jogador
-                            const clio = new Clio(alex.x + 24, alex.y);
-                            interactables.push(clio);
-                        });
+            if (!gameState.fragments.includes(1) && !gameState.hasProof('ato1', 'carta_gonzaga')) {
+                interactables.push(new Interactable(
+                    diario?.x || 150, diario?.y || 80, {
+                        name  : 'Livro sem título', color : '#4a2808',
+                        width : diario?.width  || 16, height: diario?.height || 16,
+                        isItem: true, glow: true,
+                        dialogueLines: [
+                            { speaker: 'Alex', text: 'Esse livro não tem título. Está quente como a palma de uma mão...' },
+                            { speaker: '???',  text: '"Quem lê isto foi escolhido. O passado precisa de você."' },
+                            { speaker: 'Alex', text: 'As páginas estão se movendo sozinhas!' }
+                        ],
+                        onInteractComplete: () => {
+                            sceneManager.transitionTo('encontro_clio', () => {
+                                // Cutscene de Clio
+                                const clio = new Clio(alex.x + 24, alex.y);
+                                clio.dialogueLines = [
+                                    { speaker: 'Clio', text: 'Você demorou. Mas para o Brasil, o tempo está se esgotando.' },
+                                    { speaker: 'Clio', text: 'Sua habilidade é a Visão do Guardião (V). Ela revela as distorções da Névoa do Esquecimento.' },
+                                    { speaker: 'Clio', text: 'Você coletará provas para o seu Diário (Tab). Vamos começar por Vila Rica, 1789.' }
+                                ];
+                                clio.onInteractComplete = () => { loadScene('praca'); };
+                                interactables.push(clio);
+                                // Força a interação com a Clio automaticamente
+                                setTimeout(() => {
+                                    const { lines, callback } = clio.getDialogue();
+                                    dialogueBox.show(lines, callback);
+                                }, 100);
+                            });
+                        }
                     }
-                }
-            ));
+                ));
+            } else {
+                // Clio já encontrada
+                const clio = new Clio(diario?.x + 20 || 170, diario?.y || 80);
+                clio.dialogueLines = [{ speaker: 'Clio', text: 'Volte para a praça, o passado te espera.' }];
+                interactables.push(clio);
+            }
 
             // Botão de voltar à praça
             interactables.push(new Interactable(map.spawnPoint.x - 30, map.spawnPoint.y + 10, {
                 name: 'saida_biblioteca', color: '#555',
                 width: 20, height: 20, glow: false,
-                dialogueLines: [{ speaker: 'Alex', text: '[Voltar para a Praça]' }],
+                dialogueLines: [{ speaker: 'Alex', text: '[Ir para Vila Rica]' }],
                 onInteractComplete: () => loadScene('praca')
             }));
         }
@@ -216,35 +323,56 @@ const SCENES = {
 
     igreja: {
         file : 'igreja.tmj',
-        setup(map) {
+        setup(map, spawnX, spawnY) {
             map.setProceduralPreset('igreja');
-            const spawn = clampSpawn(map, map.spawnPoint.x, map.spawnPoint.y);
+            gameState.currentAct = 'ato1';
+            const sx = spawnX !== undefined ? spawnX : map.spawnPoint.x;
+            const sy = spawnY !== undefined ? spawnY : map.spawnPoint.y;
+            const spawn = clampSpawn(map, sx, sy);
             alex.x = spawn.x;
             alex.y = spawn.y;
             interactables = [];
 
+            const isSolved = gameState.fragments.includes(1);
             const confissao = map.mapObjects.find(o => o.name === 'item_confissao');
+            
             if (confissao) {
-                interactables.push(new Interactable(confissao.x, confissao.y, {
-                    name  : 'Confessionário',
-                    color : '#4a3060',
-                    width : confissao.width, height: confissao.height,
-                    glow  : true,
-                    dialogueLines: [
-                        { speaker: 'Alex', text: 'Uma voz sussurra do confessionário...' },
-                        { speaker: 'Padre', text: 'Filho, você veio buscar a verdade? Então prepare-se para ouvi-la.' }
-                    ]
-                }));
+                if (!isSolved && !gameState.hasProof('ato1', 'confissao_conjurado')) {
+                    const obj = new Interactable(confissao.x, confissao.y, {
+                        name  : 'Confessionário', color : '#4a3060',
+                        width : confissao.width, height: confissao.height, glow  : true,
+                        dialogueLines: [
+                            { speaker: 'Alex', text: 'A Visão do Guardião revela documentos no confessionário...' },
+                            { speaker: 'Clio', text: 'É o depoimento de um conjurado. Ele diz que Tiradentes se voluntariou para a liderança, sabendo do risco de morte.' },
+                            { speaker: 'Alex', text: 'Isso não é o comportamento de alguém defendendo o rei de Portugal.' }
+                        ]
+                    });
+                    obj.proof = 'confissao_conjurado';
+                    obj.onInteractComplete = () => {
+                        if (gameState.findProof('ato1', 'confissao_conjurado')) {
+                            gameState.addDiaryEntry('Prova encontrada: depoimento de um conjurado.');
+                            if (gameState.hasAllProofsForAct('ato1')) {
+                                setTimeout(() => { investigationBoard.show('ato1', () => { loadScene('praca'); }); }, 500);
+                            }
+                        }
+                    };
+                    interactables.push(obj);
+                } else {
+                    interactables.push(new Interactable(confissao.x, confissao.y, {
+                        name  : 'Confessionário', color : '#4a3060',
+                        width : confissao.width, height: confissao.height, glow  : false,
+                        dialogueLines: [ { speaker: 'Alex', text: 'Apenas um confessionário antigo.' } ]
+                    }));
+                }
             }
 
             const saida = map.mapObjects.find(o => o.name === 'saida_igreja');
             if (saida) {
                 interactables.push(new Interactable(saida.x, saida.y, {
                     name: 'saida_igreja', color: '#555',
-                    width: saida.width, height: saida.height,
-                    glow: false,
+                    width: saida.width, height: saida.height, glow: false,
                     dialogueLines: [{ speaker: 'Alex', text: '[Voltar para a Praça]' }],
-                    onInteractComplete: () => loadScene('praca')
+                    onInteractComplete: () => loadScene('praca', 303, 135)
                 }));
             }
         }
@@ -254,7 +382,7 @@ const SCENES = {
 // ─────────────────────────────────────────────────────────────
 // CARREGAR CENA
 // ─────────────────────────────────────────────────────────────
-async function loadScene(sceneName) {
+async function loadScene(sceneName, spawnX, spawnY) {
     const scene = SCENES[sceneName];
     if (!scene) { console.error('Cena desconhecida:', sceneName); return; }
 
@@ -267,7 +395,7 @@ async function loadScene(sceneName) {
 
             // Executar setup da cena (posiciona jogador, cria interagíveis)
             // O setup() de cada cena já chama map.setProceduralPreset()
-            scene.setup(gameMap);
+            scene.setup(gameMap, spawnX, spawnY);
 
             // Snap da câmera direto no jogador (sem lerp)
             camera.x = alex.x + alex.width  / 2 - camera.width  / 2;
@@ -314,7 +442,12 @@ async function init() {
         speed     : 90,
     });
 
+    // Instanciar UI e Sistemas
     dialogueBox = new DialogueBox(canvas, ctx);
+    hud = new HUD(canvas, ctx);
+    diary = new DiaryOverlay(canvas, ctx);
+    investigationBoard = new InvestigationBoard(canvas, ctx);
+    guardianVision = new GuardianVisionEffect(canvas, ctx);
 
     // ── Cena inicial: Biblioteca (onde a história começa) ──────────
     try {
@@ -359,12 +492,20 @@ function update(dt) {
     sceneManager.update(dt);
     if (sceneManager.transitioning) return;
 
+    if (investigationBoard.active) {
+        investigationBoard.update(dt);
+        return; // Pause game while board is active
+    }
+
+    if (diary.active) return; // Pause game while diary is active
+
     if (!dialogueBox.active) {
         alex.update(dt, input, gameMap);
         camera.update(dt, alex);
     }
 
     dialogueBox.update(dt);
+    guardianVision.update(dt);
 
     for (const obj of interactables) {
         if (obj.update) obj.update(dt);
@@ -420,17 +561,15 @@ function draw() {
 
     if (alex) alex.draw(ctx);
 
+    guardianVision.draw(); // Efeito de visão desenha por cima do mundo
+
     if (debugMode && gameMap) {
         gameMap.drawCollisionDebug(ctx);
-        // Hitbox do jogador (verde)
-        ctx.strokeStyle = 'rgba(0,255,0,0.9)';
-        ctx.lineWidth = 1;
+        ctx.strokeStyle = 'rgba(0,255,0,0.9)'; ctx.lineWidth = 1;
         ctx.strokeRect(alex.x, alex.y, alex.width, alex.height);
-        // Caixa de interação (amarelo)
         const ib = alex.getInteractionBox();
         ctx.strokeStyle = 'rgba(255,255,0,0.9)';
         ctx.strokeRect(ib.x, ib.y, ib.width, ib.height);
-        // Objetos interagíveis (ciano)
         ctx.strokeStyle = 'rgba(0,255,255,0.6)';
         for (const o of interactables) ctx.strokeRect(o.x, o.y, o.width, o.height);
     }
@@ -438,7 +577,10 @@ function draw() {
     camera.restore(ctx);
 
     // UI (coordenadas de tela)
+    hud.draw();
     if (dialogueBox) dialogueBox.draw();
+    if (investigationBoard) investigationBoard.draw();
+    if (diary) diary.draw();
     sceneManager.draw();
 }
 
