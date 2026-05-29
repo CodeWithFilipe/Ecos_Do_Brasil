@@ -54,11 +54,8 @@ const IMAGE_SOURCES = {
     'dungeon'                 : './assets/dungeon.png',
     'market'                  : './assets/market.png',
 
-    // Sprites do jogador (4 direções)
-    'player_down'  : './assets/player/idle_down.png',
-    'player_up'    : './assets/player/idle_up.png',
-    'player_left'  : './assets/player/idle_left.png',
-    'player_right' : './assets/player/idle_right.png',
+    // Sprites do jogador
+    'player'  : './assets/player/Player.png',
 };
 
 function loadImage(src) {
@@ -274,25 +271,12 @@ async function init() {
 
     await loadAllImages();
 
-    // Criar jogador com sprites direcionais
-    const playerSprites = {
-        down  : IMAGES['player_down'],
-        up    : IMAGES['player_up'],
-        left  : IMAGES['player_left'],
-        right : IMAGES['player_right'],
-    };
-
-    // Detectar dimensões do sprite (idle_down como referência)
-    let frameW = 48, frameH = 64;
-    if (playerSprites.down) {
-        frameW = playerSprites.down.naturalWidth;
-        frameH = playerSprites.down.naturalHeight;
-    }
-
+    // Usando spritesheet único (Cute Fantasy Free)
     alex = new Player(0, 0, {
-        sprites : playerSprites,
-        frameW, frameH,
-        maxFrames : 1,     // idle = 1 frame por PNG
+        spriteSheet : IMAGES['player'],
+        frameW    : 32,
+        frameH    : 32,
+        maxFrames : 6,     // Cada linha costuma ter 6 frames de animação
         hitboxW   : 10,
         hitboxH   : 10,
         speed     : 90,
