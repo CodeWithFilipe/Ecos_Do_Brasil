@@ -18,15 +18,15 @@ const input        = new Input();
 const camera       = new Camera(canvas.width, canvas.height);
 const sceneManager = new SceneManager(canvas, ctx);
 
-let gameMap      = null;
-let alex         = null;
-let dialogueBox  = null;
+let gameMap       = null;
+let alex          = null;
+let dialogueBox   = null;
 let interactables = [];
-let lastTime     = performance.now();
-let spaceWasDown = false;
-let gameReady    = false;
+let lastTime      = performance.now();
+let spaceWasDown  = false;
+let gameReady     = false;
 
-// Debug: F3 = hitboxes de colisão
+// Debug: F3
 let debugMode = false;
 window.addEventListener('keydown', e => {
     if (e.code === 'F3') { debugMode = !debugMode; e.preventDefault(); }
@@ -34,28 +34,28 @@ window.addEventListener('keydown', e => {
 
 // ─────────────────────────────────────────────────────────────
 // REGISTRO GLOBAL DE IMAGENS
-// Chave = stem do .tsx ou da imagem embedded no TMJ
 // ─────────────────────────────────────────────────────────────
-const IMAGES = {};   // preenchido por loadAllImages()
+const IMAGES = {};
 
 const IMAGE_SOURCES = {
-    // Tilesets
-    'Library sprite sheet-00' : './assets/Library sprite sheet-00.png',
-    'atlas_32x'               : './assets/interior.png',
-    'atlas_16x'               : './assets/overworld.png',
-    'atlaas'                  : './assets/exterior.png',
-    'atlzzas'                 : './assets/market.png',
+    // Tilesets (chave = stem do .tsx referenciado no TMJ)
+    'Library sprite sheet-00'     : './assets/Library sprite sheet-00.png',
+    'atlas_32x'                   : './assets/interior.png',
+    'atlas_16x'                   : './assets/overworld.png',
+    'atlaas'                      : './assets/exterior.png',
+    'atlzzas'                     : './assets/market.png',
     'GothicFurnitureSprites48x48' : './assets/GothicFurnitureSprites48x48.png',
-    // Tilesets embedded (casados pelo basename sem extensão)
-    'exterior'                : './assets/exterior.png',
-    'farming'                 : './assets/farming.png',
-    'interior'                : './assets/interior.png',
-    'overworld'               : './assets/overworld.png',
-    'dungeon'                 : './assets/dungeon.png',
-    'market'                  : './assets/market.png',
 
-    // Sprites do jogador
-    'player'  : './assets/player/Player.png',
+    // Tilesets embedded (casados pelo basename)
+    'exterior'  : './assets/exterior.png',
+    'farming'   : './assets/farming.png',
+    'interior'  : './assets/interior.png',
+    'overworld' : './assets/overworld.png',
+    'dungeon'   : './assets/dungeon.png',
+    'market'    : './assets/market.png',
+
+    // Spritesheet do jogador (Cute Fantasy Free)
+    'player' : './assets/player/Player.png',
 };
 
 function loadImage(src) {
@@ -68,8 +68,8 @@ function loadImage(src) {
 }
 
 async function loadAllImages() {
-    const entries  = Object.entries(IMAGE_SOURCES);
-    const results  = await Promise.all(entries.map(([, src]) => loadImage(src)));
+    const entries = Object.entries(IMAGE_SOURCES);
+    const results = await Promise.all(entries.map(([, src]) => loadImage(src)));
     entries.forEach(([key], i) => { if (results[i]) IMAGES[key] = results[i]; });
     console.log(`📦 ${Object.keys(IMAGES).length} imagens carregadas`);
 }
@@ -79,28 +79,25 @@ async function loadAllImages() {
 // ─────────────────────────────────────────────────────────────
 async function fetchMap(filename) {
     const resp = await fetch(`./assets/maps/${filename}`);
-    if (!resp.ok) throw new Error(`HTTP ${resp.status} ao carregar ${filename}`);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status} — ${filename}`);
     return resp.json();
 }
 
-/** Cria uma instância de Map passando o registro global de imagens. */
 function buildMap(mapData) {
     return new Map(mapData, IMAGES);
 }
 
 // ─────────────────────────────────────────────────────────────
 // DEFINIÇÃO DAS CENAS
+// Vila Rica (praça) é o mapa central / hub
+// Biblioteca e Igreja são acessadas por portais
 // ─────────────────────────────────────────────────────────────
-/**
- * Cada cena = { file, setup(map) }
- * setup() recria os interagíveis e posiciona o jogador.
- */
 const SCENES = {
 
-    praca: {
-        file : 'praca.tmj',
+    // ────── VILA RICA (Hub Principal) ──────
+    vila_rica: {
+        file: 'praca.tmj',
         setup(map) {
-            // Jogador no spawn do mapa
             alex.x = map.spawnPoint.x;
             alex.y = map.spawnPoint.y;
             interactables = [];
@@ -109,10 +106,9 @@ const SCENES = {
             const estatua = map.mapObjects.find(o => o.name === 'estatua_tiradentes');
             if (estatua) {
                 interactables.push(new Interactable(estatua.x, estatua.y, {
-                    name  : 'Estátua de Tiradentes',
-                    color : '#C8A96E',
-                    width : estatua.width, height: estatua.height,
-                    glow  : false,
+                    name: 'Estátua de Tiradentes',
+                    width: estatua.width, height: estatua.height,
+                    visible: false,
                     dialogueLines: [
                         { speaker: 'Alex',       text: 'Tiradentes... Um mártir da Inconfidência Mineira.' },
                         { speaker: 'Tiradentes', text: '"A liberdade ainda que tardia." — meu lema.' },
@@ -121,58 +117,56 @@ const SCENES = {
                 }));
             }
 
-            // Portais para outras cenas
+            // Portal → Igreja
             const portaIgreja = map.mapObjects.find(o => o.name === 'porta_igreja');
             if (portaIgreja) {
                 interactables.push(new Interactable(portaIgreja.x, portaIgreja.y, {
-                    name: 'porta_igreja', color: '#8B6914',
+                    name: 'Entrada da Igreja',
                     width: portaIgreja.width, height: portaIgreja.height,
-                    glow: true,
                     dialogueLines: [{ speaker: 'Alex', text: '[Entrar na Igreja]' }],
                     onInteractComplete: () => loadScene('igreja')
                 }));
             }
 
+            // Portal → Biblioteca (Casa do Poeta)
             const portaPoeta = map.mapObjects.find(o => o.name === 'porta_poeta');
             if (portaPoeta) {
                 interactables.push(new Interactable(portaPoeta.x, portaPoeta.y, {
-                    name: 'porta_poeta', color: '#5a8a5a',
+                    name: 'Entrada da Casa do Poeta',
                     width: portaPoeta.width, height: portaPoeta.height,
-                    glow: true,
                     dialogueLines: [{ speaker: 'Alex', text: '[Entrar na Casa do Poeta]' }],
                     onInteractComplete: () => loadScene('biblioteca')
                 }));
             }
 
+            // Portal → Taverna (TODO)
             const portaTaverna = map.mapObjects.find(o => o.name === 'porta_taverna');
             if (portaTaverna) {
                 interactables.push(new Interactable(portaTaverna.x, portaTaverna.y, {
-                    name: 'porta_taverna', color: '#7a4a2a',
+                    name: 'Entrada da Taverna',
                     width: portaTaverna.width, height: portaTaverna.height,
-                    glow: true,
-                    dialogueLines: [{ speaker: 'Alex', text: '[Entrar na Taverna]' }],
-                    onInteractComplete: () => console.log('TODO: taverna')
+                    dialogueLines: [{ speaker: 'Alex', text: 'A taverna está fechada por enquanto...' }],
                 }));
             }
         }
     },
 
+    // ────── BIBLIOTECA ──────
     biblioteca: {
-        file : 'biblioteca.tmj',
+        file: 'biblioteca.tmj',
         setup(map) {
             alex.x = map.spawnPoint.x;
             alex.y = map.spawnPoint.y;
             interactables = [];
 
-            // Livro misterioso
+            // Livro misterioso (diário)
             const diario = map.mapObjects.find(o => o.name === 'item_diario');
-            interactables.push(new Interactable(
-                diario?.x || 150, diario?.y || 80, {
-                    name  : 'Livro sem título',
-                    color : '#4a2808',
-                    width : diario?.width  || 16,
-                    height: diario?.height || 16,
+            if (diario) {
+                interactables.push(new Interactable(diario.x, diario.y, {
+                    name: 'Livro sem título',
+                    width: diario.width, height: diario.height,
                     isItem: true, glow: true,
+                    glowColor: 'rgba(160, 100, 30, 0.5)',
                     dialogueLines: [
                         { speaker: 'Alex', text: 'Esse livro não tem título. Está emitindo um calor estranho...' },
                         { speaker: '???',  text: '"Quem lê isto foi escolhido. O passado precisa de você."' },
@@ -180,53 +174,55 @@ const SCENES = {
                     ],
                     onInteractComplete: () => {
                         sceneManager.transitionTo('encontro_clio', () => {
-                            // Clio aparece ao lado do jogador
                             const clio = new Clio(alex.x + 24, alex.y);
                             interactables.push(clio);
                         });
                     }
-                }
-            ));
+                }));
+            }
 
-            // Botão de voltar à praça
-            interactables.push(new Interactable(map.spawnPoint.x - 30, map.spawnPoint.y + 10, {
-                name: 'saida_biblioteca', color: '#555',
-                width: 20, height: 20, glow: false,
-                dialogueLines: [{ speaker: 'Alex', text: '[Voltar para a Praça]' }],
-                onInteractComplete: () => loadScene('praca')
+            // Saída → Vila Rica (detectar pelo spawn ou usar posição fixa)
+            // Usar a região da porta de saída do mapa
+            interactables.push(new Interactable(map.spawnPoint.x, map.spawnPoint.y + 20, {
+                name: 'Saída',
+                width: 30, height: 10,
+                dialogueLines: [{ speaker: 'Alex', text: '[Voltar para Vila Rica]' }],
+                onInteractComplete: () => loadScene('vila_rica')
             }));
         }
     },
 
+    // ────── IGREJA ──────
     igreja: {
-        file : 'igreja.tmj',
+        file: 'igreja.tmj',
         setup(map) {
             alex.x = map.spawnPoint.x;
             alex.y = map.spawnPoint.y;
             interactables = [];
 
+            // Confessionário
             const confissao = map.mapObjects.find(o => o.name === 'item_confissao');
             if (confissao) {
                 interactables.push(new Interactable(confissao.x, confissao.y, {
-                    name  : 'Confessionário',
-                    color : '#4a3060',
-                    width : confissao.width, height: confissao.height,
-                    glow  : true,
+                    name: 'Confessionário',
+                    width: confissao.width, height: confissao.height,
+                    isItem: true, glow: true,
+                    glowColor: 'rgba(80, 50, 120, 0.5)',
                     dialogueLines: [
-                        { speaker: 'Alex', text: 'Uma voz sussurra do confessionário...' },
+                        { speaker: 'Alex',  text: 'Uma voz sussurra do confessionário...' },
                         { speaker: 'Padre', text: 'Filho, você veio buscar a verdade? Então prepare-se para ouvi-la.' }
                     ]
                 }));
             }
 
+            // Saída → Vila Rica
             const saida = map.mapObjects.find(o => o.name === 'saida_igreja');
             if (saida) {
                 interactables.push(new Interactable(saida.x, saida.y, {
-                    name: 'saida_igreja', color: '#555',
+                    name: 'Saída da Igreja',
                     width: saida.width, height: saida.height,
-                    glow: false,
-                    dialogueLines: [{ speaker: 'Alex', text: '[Voltar para a Praça]' }],
-                    onInteractComplete: () => loadScene('praca')
+                    dialogueLines: [{ speaker: 'Alex', text: '[Voltar para Vila Rica]' }],
+                    onInteractComplete: () => loadScene('vila_rica')
                 }));
             }
         }
@@ -234,7 +230,7 @@ const SCENES = {
 };
 
 // ─────────────────────────────────────────────────────────────
-// CARREGAR CENA
+// CARREGAR CENA (com fade transition)
 // ─────────────────────────────────────────────────────────────
 async function loadScene(sceneName) {
     const scene = SCENES[sceneName];
@@ -244,21 +240,19 @@ async function loadScene(sceneName) {
         try {
             const mapData = await fetchMap(scene.file);
             gameMap = buildMap(mapData);
-
             camera.setBounds(gameMap.widthPx, gameMap.heightPx);
 
-            // Executar setup da cena (posiciona jogador, cria interagíveis)
             scene.setup(gameMap);
 
-            // Snap da câmera direto no jogador (sem lerp)
-            camera.x = alex.x + alex.width  / 2 - camera.width  / 2;
+            // Snap câmera no jogador
+            camera.x = alex.x + alex.width / 2  - camera.width / 2;
             camera.y = alex.y + alex.height / 2 - camera.height / 2;
             camera.x = Math.max(0, Math.min(camera.x, gameMap.widthPx  - camera.width));
             camera.y = Math.max(0, Math.min(camera.y, gameMap.heightPx - camera.height));
 
-            console.log(`🗺️ Cena "${sceneName}" carregada — spawn (${alex.x|0}, ${alex.y|0})`);
-        } catch(err) {
-            console.error(`❌ Erro ao carregar cena "${sceneName}":`, err);
+            console.log(`🗺️ Cena "${sceneName}" — spawn (${alex.x|0}, ${alex.y|0})`);
+        } catch (err) {
+            console.error(`❌ Erro ao carregar "${sceneName}":`, err);
         }
     });
 }
@@ -271,40 +265,37 @@ async function init() {
 
     await loadAllImages();
 
-    // Usando spritesheet único (Cute Fantasy Free)
+    // Criar jogador com spritesheet Cute Fantasy Free
     alex = new Player(0, 0, {
         spriteSheet : IMAGES['player'],
-        frameW    : 32,
-        frameH    : 32,
-        maxFrames : 6,     // Cada linha costuma ter 6 frames de animação
-        hitboxW   : 10,
-        hitboxH   : 10,
-        speed     : 90,
+        frameW      : 32,
+        frameH      : 32,
+        maxFrames   : 6,
+        hitboxW     : 10,
+        hitboxH     : 10,
+        speed       : 90,
+        animSpeed   : 0.12,
     });
 
     dialogueBox = new DialogueBox(canvas, ctx);
 
-    // Começar na Praça
+    // Começar em Vila Rica
     try {
-        const mapData = await fetchMap(SCENES.praca.file);
+        const mapData = await fetchMap(SCENES.vila_rica.file);
         gameMap = buildMap(mapData);
         camera.setBounds(gameMap.widthPx, gameMap.heightPx);
-        SCENES.praca.setup(gameMap);
-        alex.x = gameMap.spawnPoint.x;
-        alex.y = gameMap.spawnPoint.y;
-        camera.x = alex.x + alex.width  / 2 - camera.width  / 2;
+        SCENES.vila_rica.setup(gameMap);
+        camera.x = alex.x + alex.width / 2  - camera.width / 2;
         camera.y = alex.y + alex.height / 2 - camera.height / 2;
-    } catch(err) {
-        console.warn('⚠️ Praça não carregou, tentando biblioteca:', err);
+    } catch (err) {
+        console.warn('⚠️ Vila Rica não carregou, tentando biblioteca:', err);
         const mapData = await fetchMap(SCENES.biblioteca.file);
         gameMap = buildMap(mapData);
         camera.setBounds(gameMap.widthPx, gameMap.heightPx);
         SCENES.biblioteca.setup(gameMap);
-        alex.x = gameMap.spawnPoint.x;
-        alex.y = gameMap.spawnPoint.y;
     }
 
-    console.log(`✅ Jogo pronto! Pressione F3 para debug de colisões.`);
+    console.log('✅ Jogo pronto! F3 = debug');
     gameReady = true;
     requestAnimationFrame(gameLoop);
 }
@@ -349,7 +340,7 @@ function update(dt) {
 // INTERAÇÃO
 // ─────────────────────────────────────────────────────────────
 function rectOverlap(a, b) {
-    return a.x < b.x + b.width && a.x + a.width > b.x &&
+    return a.x < b.x + b.width  && a.x + a.width  > b.x &&
            a.y < b.y + b.height && a.y + a.height > b.y;
 }
 
@@ -373,7 +364,6 @@ function draw() {
     ctx.fillStyle = '#120d0a';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // Mundo (com câmera)
     camera.apply(ctx);
 
     if (gameMap) gameMap.draw(ctx);
@@ -394,19 +384,17 @@ function draw() {
         const ib = alex.getInteractionBox();
         ctx.strokeStyle = 'rgba(255,255,0,0.9)';
         ctx.strokeRect(ib.x, ib.y, ib.width, ib.height);
-        // Objetos interagíveis (ciano)
-        ctx.strokeStyle = 'rgba(0,255,255,0.6)';
+        // Interagíveis (ciano)
+        ctx.strokeStyle = 'rgba(0,255,255,0.5)';
         for (const o of interactables) ctx.strokeRect(o.x, o.y, o.width, o.height);
     }
 
     camera.restore(ctx);
 
-    // UI (coordenadas de tela)
+    // UI (tela)
     if (dialogueBox) dialogueBox.draw();
     sceneManager.draw();
 }
 
-// ─────────────────────────────────────────────────────────────
-// ARRANCAR
 // ─────────────────────────────────────────────────────────────
 init();

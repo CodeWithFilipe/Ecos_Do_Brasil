@@ -1,56 +1,52 @@
 /**
  * Player — Alex
  *
- * Suporta dois modos de sprite:
- *  1. spriteSheet único (spritesheet convencional, linha = direção, coluna = frame)
- *  2. sprites direcionais separados (um PNG por direção: down, up, left, right)
+ * Spritesheet: Cute Fantasy Free (Player.png)
+ * Layout: 192×320 → 6 colunas × 10 linhas de 32×32
  *
- * Config:
- *  - spriteSheet  : HTMLImageElement  — spritesheet único (modo 1)
- *  - sprites      : { down, up, left, right } — imagens por direção (modo 2)
- *  - frameW / frameH : tamanho de cada frame na imagem (padrão: 48x64)
- *  - maxFrames    : frames de animação por direção (padrão: 1)
- *  - hitboxW / hitboxH : hitbox de colisão (padrão: 12x12)
- *  - speed        : pixels/segundo (padrão: 80)
- *  - animSpeed    : segundos por frame (padrão: 0.15)
- *  - fallbackColor: cor do retângulo fallback
+ *   Linhas 0-1: walk down   (6 frames cada)
+ *   Linhas 2-3: walk right  (6 frames cada)
+ *   Linhas 4-5: walk up     (6 frames cada)
+ *   Linhas 6-7: walk left   (6 frames cada)
+ *   Linhas 8-9: extras
+ *
+ * O mapeamento usa PARES de linhas (row0 = andar, row1 = variação) por direção.
+ * facing → par de linhas da spritesheet.
  */
 export class Player {
+
+    // Mapeamento: facing → primeira linha na spritesheet
+    // facing: 0=down  1=up  2=left  3=right
+    static DIR_ROW = [0, 4, 6, 2];   // down→0, up→4, left→6, right→2
+
     constructor(x, y, config = {}) {
         this.x = x;
         this.y = y;
 
-        // Hitbox de colisão
-        this.width  = config.hitboxW || 12;
-        this.height = config.hitboxH || 12;
+        // Hitbox de colisão (caixa pequena nos pés)
+        this.width  = config.hitboxW || 10;
+        this.height = config.hitboxH || 10;
 
-        this.speed = config.speed || 80;
+        this.speed = config.speed || 90;
 
-        // Direção: 0=baixo  1=cima  2=esquerda  3=direita
+        // Direção: 0=baixo 1=cima 2=esquerda 3=direita
         this.facing = 0;
 
-        // ── Modo 1: spritesheet único ──────────────────
+        // Spritesheet
         this.spriteSheet = config.spriteSheet || null;
-
-        // ── Modo 2: imagens separadas por direção ──────
-        // { down, up, left, right } — cada uma pode ter múltiplos frames em linha
-        this.sprites = config.sprites || null;   // { down:img, up:img, left:img, right:img }
-
-        // Dimensões do frame visual
-        this.frameW = config.frameW || 48;
-        this.frameH = config.frameH || 64;
-        this.maxFrames = config.maxFrames || 1;
+        this.frameW    = config.frameW    || 32;
+        this.frameH    = config.frameH    || 32;
+        this.maxFrames = config.maxFrames || 6;
 
         // Animação
         this.animFrame = 0;
         this.animTimer = 0;
-        this.animSpeed = config.animSpeed || 0.15;
+        this.animSpeed = config.animSpeed || 0.12;
         this.isMoving  = false;
 
         this.fallbackColor = config.fallbackColor || '#3a7898';
 
-        // Offset do sprite sobre a hitbox:
-        // o sprite é centralizado horizontalmente e alinhado pelos pés
+        // Offset: sprite centralizado sobre hitbox, alinhado pelos pés
         this._recalcOffsets();
     }
 
@@ -59,32 +55,15 @@ export class Player {
         this.spriteOffsetY = -(this.frameH - this.height);
     }
 
-    /** Troca spritesheet em runtime (modo 1). */
+    /** Troca spritesheet em runtime. */
     setSpriteSheet(img, config = {}) {
         this.spriteSheet = img;
-        this.sprites = null;
-        if (config.frameW) this.frameW = config.frameW;
-        if (config.frameH) this.frameH = config.frameH;
+        if (config.frameW)    this.frameW    = config.frameW;
+        if (config.frameH)    this.frameH    = config.frameH;
         if (config.maxFrames) this.maxFrames = config.maxFrames;
         this._recalcOffsets();
     }
 
-    /** Troca sprites direcionais em runtime (modo 2). */
-    setDirectionalSprites(sprites, config = {}) {
-        this.sprites = sprites;
-        this.spriteSheet = null;
-        if (config.frameW) this.frameW = config.frameW;
-        if (config.frameH) this.frameH = config.frameH;
-        if (config.maxFrames) this.maxFrames = config.maxFrames;
-        this._recalcOffsets();
-    }
-
-    /**
-     * Atualiza movimento com colisão separada por eixo.
-     * @param {number} dt
-     * @param {Input} input
-     * @param {Map|null} gameMap
-     */
     update(dt, input, gameMap = null) {
         let dx = 0, dy = 0;
 
@@ -112,12 +91,14 @@ export class Player {
                 this.y += my;
             }
 
+            // Animação de caminhada
             this.animTimer += dt;
             if (this.animTimer >= this.animSpeed) {
                 this.animFrame = (this.animFrame + 1) % this.maxFrames;
                 this.animTimer = 0;
             }
         } else {
+            // Parado: frame 0 (idle)
             this.animFrame = 0;
             this.animTimer = 0;
         }
@@ -125,42 +106,34 @@ export class Player {
 
     /** Hitbox de interação na frente do personagem. */
     getInteractionBox() {
-        const size = 16;
+        const size = 14;
         let ix = this.x, iy = this.y;
-        if (this.facing === 0) iy += this.height;
-        if (this.facing === 1) iy -= size;
-        if (this.facing === 2) ix -= size;
-        if (this.facing === 3) ix += this.width;
+        if (this.facing === 0) iy += this.height;     // baixo
+        if (this.facing === 1) iy -= size;             // cima
+        if (this.facing === 2) ix -= size;             // esquerda
+        if (this.facing === 3) ix += this.width;       // direita
         return { x: ix, y: iy, width: size, height: size };
     }
 
     draw(ctx) {
-        const dx = this.x + this.spriteOffsetX;
-        const dy = this.y + this.spriteOffsetY;
+        const drawX = this.x + this.spriteOffsetX;
+        const drawY = this.y + this.spriteOffsetY;
 
-        // ── Modo 2: sprites direcionais ───────────────
-        if (this.sprites) {
-            const dirKey = ['down', 'up', 'left', 'right'][this.facing];
-            const img = this.sprites[dirKey];
-            if (img && img.complete && img.naturalWidth > 0) {
-                // Cada PNG pode ter múltiplos frames em linha (idle só tem 1)
-                const sx = this.animFrame * this.frameW;
-                ctx.drawImage(img, sx, 0, this.frameW, this.frameH,
-                              dx, dy, this.frameW, this.frameH);
-                return;
-            }
-        }
-
-        // ── Modo 1: spritesheet único ─────────────────
         if (this.spriteSheet && this.spriteSheet.complete && this.spriteSheet.naturalWidth > 0) {
+            // Usar mapeamento de direção → linha da spritesheet
+            const row = Player.DIR_ROW[this.facing] || 0;
             const sx = this.animFrame * this.frameW;
-            const sy = this.facing    * this.frameH;
-            ctx.drawImage(this.spriteSheet, sx, sy, this.frameW, this.frameH,
-                          dx, dy, this.frameW, this.frameH);
+            const sy = row * this.frameH;
+
+            ctx.drawImage(
+                this.spriteSheet,
+                sx, sy, this.frameW, this.frameH,
+                drawX, drawY, this.frameW, this.frameH
+            );
             return;
         }
 
-        // ── Fallback: retângulo colorido ───────────────
+        // Fallback: retângulo colorido
         ctx.fillStyle = this.fallbackColor;
         ctx.fillRect(this.x, this.y, this.width, this.height);
     }
