@@ -1,128 +1,115 @@
 import { NPC } from './NPC.js';
 
 /**
- * Clio — A Musa da História
- * NPC especial que serve como guia do jogador através do tempo.
- * Aparece após Alex tocar no livro e o acompanha na jornada.
- *
- * Sem sprite: desenha uma aura mística + partículas (não um retângulo feio).
+ * Clio — A musa da história (Deusa do Tempo)
+ * Agora com um visual místico, renderizada com o spritesheet do player e uma aura dourada/roxa.
  */
 export class Clio extends NPC {
     constructor(x, y, spriteSheet = null) {
         super(x, y, {
             name: 'Clio',
-            width: 16,
-            height: 24,
+            width: 16, height: 24,
             spriteSheet: spriteSheet,
-            dialogueLines: [
-                { speaker: 'Clio', text: 'Finalmente... Alguém me encontrou depois de tantos séculos.' },
-                { speaker: 'Clio', text: 'Eu sou Clio, a guardiã da memória. Este livro me trouxe até você.' },
-                { speaker: 'Clio', text: 'O passado do Brasil está se desfazendo... e só você pode ajudar a reconstruí-lo.' },
-                { speaker: 'Alex', text: 'Como assim? Eu sou só um estudante!' },
-                { speaker: 'Clio', text: 'Exatamente. Um estudante curioso. É tudo que o passado precisa.' }
-            ]
+            frameW: 32, frameH: 32,
+            facing: 0,
+            maxFrames: 4 // Usa animação Idle
         });
-
-        this.glowColor = '#D4A5FF';
+        
         this.glowTimer = 0;
-        this.isGuide   = true;
-
-        this.tipsPool = [
-            { speaker: 'Clio', text: 'Procure pelos ecos... Eles revelam a verdade escondida.' },
-            { speaker: 'Clio', text: 'Cada época que visitarmos guarda um segredo do Brasil.' },
-            { speaker: 'Clio', text: 'Cuidado com o que toca. Nem tudo do passado quer ser lembrado.' },
-            { speaker: 'Clio', text: 'A história não é feita só de heróis. Preste atenção nas pessoas comuns.' }
-        ];
-        this.currentTipIndex  = 0;
+        this.particles = Array.from({ length: 8 }).map(() => this._createParticle());
         this.hasBeenIntroduced = false;
+        // Ajuste da velocidade de animação do idle
+        this.animSpeed = 0.25;
+    }
+
+    _createParticle() {
+        return {
+            x: this.x + Math.random() * this.width,
+            y: this.y + Math.random() * this.height,
+            vx: (Math.random() - 0.5) * 5,
+            vy: -10 - Math.random() * 10,
+            life: Math.random() * 2,
+            maxLife: 2
+        };
     }
 
     update(dt) {
         super.update(dt);
         this.glowTimer += dt;
-    }
-
-    getDialogue() {
-        if (!this.hasBeenIntroduced) {
-            this.hasBeenIntroduced = true;
-            return { lines: this.dialogueLines, callback: this.onInteractComplete };
+        
+        // Atualiza partículas místicas
+        for (const p of this.particles) {
+            p.x += p.vx * dt;
+            p.y += p.vy * dt;
+            p.life -= dt;
+            if (p.life <= 0) {
+                Object.assign(p, this._createParticle());
+            }
         }
-        const tip = this.tipsPool[this.currentTipIndex];
-        this.currentTipIndex = (this.currentTipIndex + 1) % this.tipsPool.length;
-        return { lines: [tip], callback: null };
     }
 
     draw(ctx) {
-        // Se tem sprite, usar o draw do NPC base
+        // Efeito de flutuação e aura
+        const bob = Math.sin(this.glowTimer * 2) * 3;
+        const drawX = this.x - 8;
+        const drawY = this.y - 8 + bob;
+
+        this._drawAura(ctx);
+
         if (this.spriteSheet && this.spriteSheet.complete) {
-            // Aura antes do sprite
-            this._drawAura(ctx);
-            super.draw(ctx);
-            this._drawParticles(ctx);
-            return;
+            // Desenha a deusa usando a linha de Idle do Player (Row 4 = Down)
+            const row = 4;
+            const sx = this.animFrame * this.frameW;
+            const sy = row * this.frameH;
+
+            ctx.save();
+            ctx.globalAlpha = 0.9;
+            ctx.drawImage(this.spriteSheet, sx, sy, this.frameW, this.frameH, drawX, drawY, this.frameW, this.frameH);
+            
+            // Filtro místico (sobrepõe a cor preservando a transparência original do sprite)
+            ctx.globalCompositeOperation = 'source-atop';
+            ctx.fillStyle = 'rgba(230, 200, 255, 0.4)'; // Tom etéreo roxo claro
+            ctx.fillRect(drawX, drawY, this.frameW, this.frameH);
+            ctx.restore();
+        } else {
+            // Fallback (o NPC base já desenha a silhueta, mas queremos algo translúcido)
+            ctx.save();
+            ctx.globalAlpha = 0.5;
+            ctx.translate(0, bob);
+            super._drawFallbackCharacter(ctx);
+            ctx.restore();
         }
 
-        // Sem sprite: desenhar um "espírito" translúcido em vez de retângulo
-        this._drawAura(ctx);
-        this._drawSpirit(ctx);
         this._drawParticles(ctx);
+        this._drawNameTag(ctx);
     }
 
     _drawAura(ctx) {
-        const intensity = Math.sin(this.glowTimer * 2) * 0.1 + 0.2;
-        ctx.fillStyle = this.glowColor;
-        ctx.globalAlpha = intensity;
-        ctx.beginPath();
-        ctx.ellipse(
-            this.x + this.width / 2,
-            this.y + this.height / 2,
-            this.width / 2 + 6,
-            this.height / 2 + 6,
-            0, 0, Math.PI * 2
-        );
-        ctx.fill();
-        ctx.globalAlpha = 1;
-    }
-
-    /** Fallback "espírito" — silhueta translúcida sem retângulo feio. */
-    _drawSpirit(ctx) {
         const cx = this.x + this.width / 2;
         const cy = this.y + this.height / 2;
-        const bob = Math.sin(this.glowTimer * 2.5) * 2;
+        const radius = 25 + Math.sin(this.glowTimer * 4) * 5;
 
-        // Corpo translúcido
-        ctx.globalAlpha = 0.55;
-        ctx.fillStyle = '#c8a0f0';
+        const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius);
+        grad.addColorStop(0, 'rgba(255, 230, 150, 0.4)');
+        grad.addColorStop(0.5, 'rgba(200, 100, 255, 0.1)');
+        grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+
+        ctx.fillStyle = grad;
+        ctx.globalCompositeOperation = 'lighter';
         ctx.beginPath();
-        ctx.ellipse(cx, cy + bob, 6, 10, 0, 0, Math.PI * 2);
+        ctx.arc(cx, cy, radius, 0, Math.PI * 2);
         ctx.fill();
-
-        // "Cabeça"
-        ctx.fillStyle = '#e0c8ff';
-        ctx.beginPath();
-        ctx.arc(cx, cy - 8 + bob, 5, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.globalAlpha = 1;
-
-        // Nome sutil
-        ctx.fillStyle = 'rgba(200, 170, 255, 0.7)';
-        ctx.font = '6px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillText('Clio', cx, this.y - 6 + bob);
-        ctx.textAlign = 'left';
+        ctx.globalCompositeOperation = 'source-over';
     }
 
     _drawParticles(ctx) {
-        ctx.fillStyle = '#FFE4B5';
-        for (let i = 0; i < 3; i++) {
-            const angle  = this.glowTimer * (1 + i * 0.5) + i * (Math.PI * 2 / 3);
-            const radius = 14 + Math.sin(this.glowTimer * 2 + i) * 3;
-            const px = this.x + this.width / 2  + Math.cos(angle) * radius;
-            const py = this.y + this.height / 2 + Math.sin(angle) * radius;
-            const size = 1.5 + Math.sin(this.glowTimer * 3 + i) * 0.5;
-
-            ctx.globalAlpha = 0.5 + Math.sin(this.glowTimer * 4 + i) * 0.3;
-            ctx.fillRect(px - size / 2, py - size / 2, size, size);
+        ctx.fillStyle = '#FFF';
+        for (const p of this.particles) {
+            const alpha = Math.max(0, p.life / p.maxLife);
+            ctx.globalAlpha = alpha;
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, 1, 0, Math.PI * 2);
+            ctx.fill();
         }
         ctx.globalAlpha = 1;
     }

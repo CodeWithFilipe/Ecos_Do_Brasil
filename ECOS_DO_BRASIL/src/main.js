@@ -215,7 +215,7 @@ const SCENES = {
 
             if (!gameState.clioMet) {
                 // Primeira vez: Clio se apresenta e explica a missão
-                const clio = new Clio(clioX, clioY);
+                const clio = new Clio(clioX, clioY, IMAGES['player']);
                 clio.dialogueLines = [
                     { speaker: 'Clio', text: 'Finalmente... Alguém me encontrou depois de tantos séculos.' },
                     { speaker: 'Alex', text: 'Onde eu estou?! O que aconteceu?!' },
@@ -227,16 +227,18 @@ const SCENES = {
                     { speaker: 'Clio', text: 'Preciso que você vá à Vila Rica de 1789 e descubra a verdade sobre a Inconfidência Mineira.' },
                     { speaker: 'Alex', text: 'E como eu faço isso?' },
                     { speaker: 'Clio', text: 'Converse com as pessoas de lá. Colete informações. Mas cuidado — nem tudo que ouvir é verdade.' },
-                    { speaker: 'Clio', text: 'Quando tiver todas as informações, volte aqui. Eu vou te ajudar a separar verdade de mentira.' },
+                    { speaker: 'Clio', text: 'Quando tiver todas as informações, volte aqui. Eu vou te ajudar a separar verdade de mentira. Vá agora!' },
                 ];
                 clio.onInteractComplete = () => {
                     gameState.clioMet = true;
+                    // Transição automática para a Vila Rica após ela falar na primeira fase
+                    loadScene('vila_rica');
                 };
                 clio.hasBeenIntroduced = false;
                 interactables.push(clio);
             } else {
                 // Clio após primeira vez
-                const clio = new Clio(clioX, clioY);
+                const clio = new Clio(clioX, clioY, IMAGES['player']);
                 clio.hasBeenIntroduced = true;
 
                 if (gameState.hasAllInfos()) {
@@ -254,8 +256,11 @@ const SCENES = {
                                     { speaker: 'Clio', text: '🎉 Você dissipou a névoa! A verdade sobre a Inconfidência Mineira está segura!' },
                                     { speaker: 'Clio', text: 'A Derrama provocou a revolta, e a traição de Silvério dos Reis a encerrou.' },
                                     { speaker: 'Clio', text: 'Parabéns, Alex! O passado está a salvo... por enquanto.' },
-                                    { speaker: 'Alex', text: 'Isso foi incrível! Quero descobrir mais!' },
-                                ], () => {});
+                                    { speaker: 'Alex', text: 'Isso foi incrível! E agora?' },
+                                    { speaker: 'Clio', text: 'Agora, a sua missão continua no Império do Brasil... Prepare-se para o Rio de Janeiro!' }
+                                ], () => {
+                                    loadScene('rio_de_janeiro');
+                                });
                             },
                             // Errou → voltar à Vila Rica
                             () => {
@@ -273,8 +278,8 @@ const SCENES = {
                 interactables.push(clio);
             }
 
-            // Portal para Vila Rica (após conhecer Clio)
-            if (gameState.clioMet || gameState.hasAllInfos()) {
+            // Portal para Vila Rica (somente se não venceu o jogo ainda)
+            if (gameState.clioMet && !gameState.gameWon) {
                 interactables.push(new Interactable(map.spawnPoint.x, map.spawnPoint.y + 20, {
                     name: 'Portal Vila Rica',
                     width: 40, height: 10,
@@ -531,6 +536,35 @@ const SCENES = {
                     onInteractComplete: () => loadScene('vila_rica')
                 }));
             }
+        }
+    },
+
+    // ─────────────────────────────────────────────
+    // RIO DE JANEIRO (Fase 2)
+    // ─────────────────────────────────────────────
+    rio_de_janeiro: {
+        file: 'praca.tmj', // Reutilizando a praça temporariamente para a segunda fase
+        setup(map) {
+            alex.x = map.spawnPoint.x;
+            alex.y = map.spawnPoint.y;
+            interactables = [];
+            gameState.currentPhase = 'rio_de_janeiro';
+            infoPanel.active = false;
+            tutorial.active = false;
+
+            const carioca = new NPC(map.spawnPoint.x + 30, map.spawnPoint.y - 10, {
+                name: 'Carioca',
+                color: '#1E88E5',
+                accentColor: '#0D47A1',
+                width: 16, height: 24,
+                dialogueLines: [
+                    { speaker: 'Carioca', text: 'Bem-vindo ao Rio de Janeiro, a capital do Império do Brasil!' },
+                    { speaker: 'Carioca', text: 'Aqui nós temos a Família Real e muito pão de açúcar. E não estou falando da montanha!' },
+                    { speaker: 'Alex', text: 'Uau! Eu consegui chegar na Fase 2!' },
+                    { speaker: 'Carioca', text: 'Exato! A Fase 2 está em construção, mas em breve teremos novos mistérios aqui.' }
+                ]
+            });
+            interactables.push(carioca);
         }
     },
 };
