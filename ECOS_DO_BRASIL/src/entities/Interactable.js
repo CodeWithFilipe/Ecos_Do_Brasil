@@ -37,25 +37,21 @@ export class Interactable {
     }
 
     draw(ctx) {
-        // Efeito de brilho/pulse
-        if (this.glowEnabled) {
-            const glow = Math.sin(this.glowTimer * 3) * 0.3 + 0.5;
-            ctx.globalAlpha = glow;
-            ctx.fillStyle = this.color;
-            ctx.fillRect(this.x - 2, this.y - 2, this.width + 4, this.height + 4);
-            ctx.globalAlpha = 1;
-        }
+        // Interactáveis são zonas invisíveis — só o indicador "!" flutua
+        if (!this.glowEnabled) return; // portais sem glow = puramente invisíveis
 
-        // Objeto em si
-        ctx.fillStyle = this.color;
-        ctx.fillRect(this.x, this.y, this.width, this.height);
-
-        // Indicador de interação (pequeno ícone "!")
-        ctx.fillStyle = '#FFD700';
-        ctx.font = 'bold 8px monospace';
-        ctx.textAlign = 'center';
+        // Indicador "!" flutuante dourado (só para itens/objetos com glow)
         const bounceY = Math.sin(this.glowTimer * 4) * 2;
+        const alpha   = Math.sin(this.glowTimer * 3) * 0.25 + 0.75;
+
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle   = '#FFD700';
+        ctx.font        = 'bold 8px monospace';
+        ctx.textAlign   = 'center';
+        ctx.shadowColor = '#FFD700';
+        ctx.shadowBlur  = 4;
         ctx.fillText('!', this.x + this.width / 2, this.y - 4 + bounceY);
-        ctx.textAlign = 'left';
+        ctx.restore();
     }
 }

@@ -91,6 +91,15 @@ function buildMap(mapData) {
     return new Map(mapData, IMAGES);
 }
 
+/** Garante que as coordenadas de spawn fiquem dentro dos limites do mapa. */
+function clampSpawn(map, x, y) {
+    const margin = 4;
+    return {
+        x: Math.max(margin, Math.min(x, map.widthPx  - alex.width  - margin)),
+        y: Math.max(margin, Math.min(y, map.heightPx - alex.height - margin)),
+    };
+}
+
 // ─────────────────────────────────────────────────────────────
 // DEFINIÇÃO DAS CENAS
 // ─────────────────────────────────────────────────────────────
@@ -103,9 +112,11 @@ const SCENES = {
     praca: {
         file : 'praca.tmj',
         setup(map) {
-            // Jogador no spawn do mapa
-            alex.x = map.spawnPoint.x;
-            alex.y = map.spawnPoint.y;
+            map.setProceduralPreset('praca');
+            // Jogador no spawn do mapa (clampado para ficar dentro dos limites)
+            const spawn = clampSpawn(map, map.spawnPoint.x, map.spawnPoint.y);
+            alex.x = spawn.x;
+            alex.y = spawn.y;
             interactables = [];
 
             // Estátua de Tiradentes
@@ -163,8 +174,10 @@ const SCENES = {
     biblioteca: {
         file : 'biblioteca.tmj',
         setup(map) {
-            alex.x = map.spawnPoint.x;
-            alex.y = map.spawnPoint.y;
+            map.setProceduralPreset('biblioteca');
+            const spawn = clampSpawn(map, map.spawnPoint.x, map.spawnPoint.y);
+            alex.x = spawn.x;
+            alex.y = spawn.y;
             interactables = [];
 
             // Livro misterioso
@@ -204,8 +217,10 @@ const SCENES = {
     igreja: {
         file : 'igreja.tmj',
         setup(map) {
-            alex.x = map.spawnPoint.x;
-            alex.y = map.spawnPoint.y;
+            map.setProceduralPreset('igreja');
+            const spawn = clampSpawn(map, map.spawnPoint.x, map.spawnPoint.y);
+            alex.x = spawn.x;
+            alex.y = spawn.y;
             interactables = [];
 
             const confissao = map.mapObjects.find(o => o.name === 'item_confissao');
@@ -251,6 +266,7 @@ async function loadScene(sceneName) {
             camera.setBounds(gameMap.widthPx, gameMap.heightPx);
 
             // Executar setup da cena (posiciona jogador, cria interagíveis)
+            // O setup() de cada cena já chama map.setProceduralPreset()
             scene.setup(gameMap);
 
             // Snap da câmera direto no jogador (sem lerp)
@@ -300,24 +316,28 @@ async function init() {
 
     dialogueBox = new DialogueBox(canvas, ctx);
 
-    // Começar na Praça
+    // ── Cena inicial: Biblioteca (onde a história começa) ──────────
     try {
-        const mapData = await fetchMap(SCENES.praca.file);
-        gameMap = buildMap(mapData);
-        camera.setBounds(gameMap.widthPx, gameMap.heightPx);
-        SCENES.praca.setup(gameMap);
-        alex.x = gameMap.spawnPoint.x;
-        alex.y = gameMap.spawnPoint.y;
-        camera.x = alex.x + alex.width  / 2 - camera.width  / 2;
-        camera.y = alex.y + alex.height / 2 - camera.height / 2;
-    } catch(err) {
-        console.warn('⚠️ Praça não carregou, tentando biblioteca:', err);
         const mapData = await fetchMap(SCENES.biblioteca.file);
         gameMap = buildMap(mapData);
         camera.setBounds(gameMap.widthPx, gameMap.heightPx);
         SCENES.biblioteca.setup(gameMap);
-        alex.x = gameMap.spawnPoint.x;
-        alex.y = gameMap.spawnPoint.y;
+        // setup() já usa clampSpawn, câmera faz snap no jogador
+        camera.x = alex.x + alex.width  / 2 - camera.width  / 2;
+        camera.y = alex.y + alex.height / 2 - camera.height / 2;
+        camera.x = Math.max(0, Math.min(camera.x, gameMap.widthPx  - camera.width));
+        camera.y = Math.max(0, Math.min(camera.y, gameMap.heightPx - camera.height));
+    } catch(err) {
+        console.warn('⚠️ Biblioteca não carregou, tentando praça:', err);
+        const mapData = await fetchMap(SCENES.praca.file);
+        gameMap = buildMap(mapData);
+        camera.setBounds(gameMap.widthPx, gameMap.heightPx);
+        SCENES.praca.setup(gameMap);
+        // setup() já usa clampSpawn
+        camera.x = alex.x + alex.width  / 2 - camera.width  / 2;
+        camera.y = alex.y + alex.height / 2 - camera.height / 2;
+        camera.x = Math.max(0, Math.min(camera.x, gameMap.widthPx  - camera.width));
+        camera.y = Math.max(0, Math.min(camera.y, gameMap.heightPx - camera.height));
     }
 
     console.log(`✅ Jogo pronto! Pressione F3 para debug de colisões.`);

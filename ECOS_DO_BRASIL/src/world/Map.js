@@ -18,22 +18,51 @@ export class Map {
      *   Exemplo: { 'Library sprite sheet-00': img, 'atlas_32x': img2, 'interior': img3 }
      */
     constructor(mapData, imageRegistry = {}) {
-        this.mapData      = mapData;
-        this.tileWidth    = mapData.tilewidth;
-        this.tileHeight   = mapData.tileheight;
-        this.widthPx      = mapData.width  * this.tileWidth;
-        this.heightPx     = mapData.height * this.tileHeight;
+        this.mapData = mapData;
+        this.tileWidth = mapData.tilewidth;
+        this.tileHeight = mapData.tileheight;
+        this.widthPx = mapData.width * this.tileWidth;
+        this.heightPx = mapData.height * this.tileHeight;
 
-        this.tilesets          = [];
-        this.collisionRects    = [];
+        this.tilesets = [];
+        this.collisionRects = [];
         this.collisionPolygons = [];
-        this.spawnPoint        = { x: 0, y: 0 };
-        this.mapObjects        = [];   // portais, itens, etc.
+        this.spawnPoint = { x: 0, y: 0 };
+        this.mapObjects = [];   // portais, itens, etc.
 
         this._buildTilesets(imageRegistry);
         this._parseCollisions();
         this._parseObjects();
+
+        // Preset do background procedural ('praca', 'biblioteca', 'igreja', 'default')
+        this.proceduralPreset = 'default';
     }
+
+    /** Define o preset visual do fundo procedural para esta cena. */
+    setProceduralPreset(preset) {
+        this.proceduralPreset = preset;
+    }
+
+    /**
+     * Metadados conhecidos dos tilesets externos (.tsx).
+     * Como os .tsx não estão no projeto, definimos aqui manualmente.
+     * Chave = stem do nome do .tsx (sem extensão e sem diretórios).
+     */
+    static KNOWN_TILESETS = {
+        // exterior.png: 768×512, tiles 16×16 → 48 colunas
+        'atlaas'                    : { tileW: 16, tileH: 16, columns: 48 },
+        // overworld.png: 1024×256, tiles 16×16 → 64 colunas
+        'atlas_16x'                 : { tileW: 16, tileH: 16, columns: 64 },
+        // interior.png: 1536×512, tiles 32×32 → 48 colunas
+        'atlas_32x'                 : { tileW: 32, tileH: 32, columns: 48 },
+        // market.png: 512×256, tiles 16×16 → 32 colunas
+        'atlzzas'                   : { tileW: 16, tileH: 16, columns: 32 },
+        // Library sprite sheet-00.png: 500×500, tiles 20×20 → 25 colunas
+        'Library sprite sheet-00'   : { tileW: 20, tileH: 20, columns: 25 },
+        // GothicFurnitureSprites48x48.png: 768×768, tiles 48×48 → 16 colunas
+        'GothicFurnitureSprites48x48': { tileW: 48, tileH: 48, columns: 16 },
+    };
+
 
     // ─────────────────────────────────────────────
     // TILESETS
@@ -42,25 +71,25 @@ export class Map {
     _buildTilesets(registry) {
         for (const ts of this.mapData.tilesets) {
             const entry = {
-                firstgid   : ts.firstgid,
-                image      : null,
-                tileW      : ts.tilewidth  || this.tileWidth,
-                tileH      : ts.tileheight || this.tileHeight,
-                columns    : ts.columns    || 0,
-                tilecount  : ts.tilecount  || 0,
+                firstgid: ts.firstgid,
+                image: null,
+                tileW: ts.tilewidth || this.tileWidth,
+                tileH: ts.tileheight || this.tileHeight,
+                columns: ts.columns || 0,
+                tilecount: ts.tilecount || 0,
             };
 
             if (ts.image) {
                 // ── Embedded: dados completos no TMJ ──────
-                entry.columns   = ts.columns;
+                entry.columns = ts.columns;
                 entry.tilecount = ts.tilecount;
-                entry.tileW     = ts.tilewidth  || this.tileWidth;
-                entry.tileH     = ts.tileheight || this.tileHeight;
+                entry.tileW = ts.tilewidth || this.tileWidth;
+                entry.tileH = ts.tileheight || this.tileHeight;
                 // Tentar casar pelo basename da imagem
                 const imgBase = this._stem(ts.image);
                 entry.image = registry[imgBase]
-                           || registry[this._stem(imgBase)]
-                           || null;
+                    || registry[this._stem(imgBase)]
+                    || null;
                 if (!entry.image) console.warn(`[Map] Tileset embedded sem imagem: ${ts.image}`);
 
             } else if (ts.source) {
@@ -68,6 +97,21 @@ export class Map {
                 const srcStem = this._stem(ts.source);
                 entry.image = registry[srcStem] || null;
                 if (!entry.image) console.warn(`[Map] Tileset externo sem imagem: ${ts.source}`);
+
+                // Aplicar metadados conhecidos (tileW/tileH/columns do .tsx que não temos)
+                const known = Map.KNOWN_TILESETS[srcStem];
+                if (known) {
+                    entry.tileW      = known.tileW;
+                    entry.tileH      = known.tileH;
+                    entry.columns    = known.columns;
+                    entry.skipRender = known.skipRender || false;
+                } else {
+                    // Fallback: calcular colunas pela largura da imagem se disponível
+                    if (entry.image) {
+                        entry.columns = Math.floor(entry.image.naturalWidth / entry.tileW);
+                    }
+                    console.warn(`[Map] Tileset externo sem metadados conhecidos: ${ts.source} (usando tileW=${entry.tileW})`);
+                }
             }
 
             this.tilesets.push(entry);
@@ -76,6 +120,7 @@ export class Map {
         // Ordenar decrescente por firstgid (para busca eficiente)
         this.tilesets.sort((a, b) => b.firstgid - a.firstgid);
     }
+
 
     /** Remove extensão e diretórios de um caminho, retorna só o nome-base sem extensão. */
     _stem(path) {
@@ -136,10 +181,10 @@ export class Map {
                 this.spawnPoint = { x: obj.x, y: obj.y };
             } else if (obj.name) {
                 this.mapObjects.push({
-                    name  : obj.name,
-                    x     : obj.x,
-                    y     : obj.y,
-                    width : obj.width  || 16,
+                    name: obj.name,
+                    x: obj.x,
+                    y: obj.y,
+                    width: obj.width || 16,
                     height: obj.height || 16,
                 });
             }
@@ -151,19 +196,19 @@ export class Map {
     // ─────────────────────────────────────────────
 
     isColliding(x, y, w, h) {
-        // Limites do mapa - agora mais permissivo para evitar travamento no spawn
-        if (x < -32 || y < -32 || x + w > this.widthPx + 32 || y + h > this.heightPx + 32) return true;
+        // Limites do mapa — bloqueia nas bordas reais
+        if (x < 0 || y < 0 || x + w > this.widthPx || y + h > this.heightPx) return true;
 
         // Retângulos (AABB)
         for (const r of this.collisionRects) {
-            if (x < r.x + r.width  && x + w > r.x &&
+            if (x < r.x + r.width && x + w > r.x &&
                 y < r.y + r.height && y + h > r.y) return true;
         }
 
         // Polígonos (ponto-em-polígono nos 5 pontos da hitbox)
         const pts = [
-            { x, y }, { x: x+w, y }, { x, y: y+h }, { x: x+w, y: y+h },
-            { x: x + w/2, y: y + h/2 }
+            { x, y }, { x: x + w, y }, { x, y: y + h }, { x: x + w, y: y + h },
+            { x: x + w / 2, y: y + h / 2 }
         ];
         for (const poly of this.collisionPolygons) {
             for (const p of pts) {
@@ -204,7 +249,7 @@ export class Map {
                 const raw = layer.data[i];
                 if (!raw) continue;
 
-                const gid   = (raw & ~(FLIP_H | FLIP_V | FLIP_D)) >>> 0;
+                const gid = (raw & ~(FLIP_H | FLIP_V | FLIP_D)) >>> 0;
                 const flipH = (raw & FLIP_H) !== 0;
                 const flipV = (raw & FLIP_V) !== 0;
 
@@ -212,15 +257,15 @@ export class Map {
                 if (!ts || !ts.image || !ts.image.complete || !ts.image.naturalWidth) continue;
 
                 const localId = gid - ts.firstgid;
-                const cols    = ts.columns || Math.floor(ts.image.width / ts.tileW);
+                const cols = ts.columns || Math.floor(ts.image.width / ts.tileW);
                 if (cols <= 0) continue;
 
                 const sx = (localId % cols) * ts.tileW;
                 const sy = Math.floor(localId / cols) * ts.tileH;
 
                 // Posição de destino (sempre baseada no tilesize do MAPA)
-                const dx = (i % layer.width)              * this.tileWidth;
-                const dy = Math.floor(i / layer.width)    * this.tileHeight;
+                const dx = (i % layer.width) * this.tileWidth;
+                const dy = Math.floor(i / layer.width) * this.tileHeight;
 
                 if (flipH || flipV) {
                     ctx.save();
@@ -242,11 +287,11 @@ export class Map {
 
     drawCollisionDebug(ctx) {
         ctx.strokeStyle = 'rgba(255,0,0,0.6)';
-        ctx.fillStyle   = 'rgba(255,0,0,0.12)';
-        ctx.lineWidth   = 1;
+        ctx.fillStyle = 'rgba(255,0,0,0.12)';
+        ctx.lineWidth = 1;
         for (const r of this.collisionRects) {
             ctx.strokeRect(r.x, r.y, r.width, r.height);
-            ctx.fillRect  (r.x, r.y, r.width, r.height);
+            ctx.fillRect(r.x, r.y, r.width, r.height);
         }
         for (const poly of this.collisionPolygons) {
             ctx.beginPath();
