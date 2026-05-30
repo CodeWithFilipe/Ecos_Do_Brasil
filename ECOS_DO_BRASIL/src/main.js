@@ -32,6 +32,8 @@ let tutorial      = null;
 let interactables = [];
 let lastTime      = performance.now();
 let spaceWasDown  = false;
+let upWasDown     = false;
+let downWasDown   = false;
 let gameReady     = false;
 let nextSpawnDoor = null;   // Nome da porta para respawn inteligente (ex: 'porta_poeta')
 
@@ -58,12 +60,15 @@ const IMAGE_SOURCES = {
     'interior16'                  : './assets/interior16.png',
 
     // Tilesets (basename match)
-    'exterior'  : './assets/exterior.png',
-    'farming'   : './assets/farming.png',
-    'interior'  : './assets/interior.png',
-    'overworld' : './assets/overworld.png',
-    'dungeon'   : './assets/dungeon.png',
-    'market'    : './assets/market.png',
+    'exterior'     : './assets/exterior.png',
+    'farming'      : './assets/farming.png',
+    'interior'     : './assets/interior.png',
+    'overworld'    : './assets/overworld.png',
+    'dungeon'      : './assets/dungeon.png',
+    'market'       : './assets/market.png',
+    'download (1)' : './assets/download (1).png',
+    'download'     : './assets/download.png',
+    'republica'    : './assets/republica.png',
 
     // Player
     'player'         : './assets/player/Player.png',
@@ -105,11 +110,10 @@ function buildMap(mapData) {
 // ═══════════════════════════════════════════════════════════════
 // DEFINIÇÃO DAS CENAS
 // ═══════════════════════════════════════════════════════════════
-
 const SCENES = {
 
     // ─────────────────────────────────────────────
-    // BIBLIOTECA (Tutorial — Início do jogo)
+    // BIBLIOTECA (Tutorial — Início do jogo & Quiz Final)
     // ─────────────────────────────────────────────
     biblioteca: {
         file: 'biblioteca.tmj',
@@ -118,79 +122,197 @@ const SCENES = {
             alex.y = map.spawnPoint.y;
             interactables = [];
             gameState.currentPhase = 'biblioteca';
-
-            // Tutorial ativo
-            tutorial.active = true;
-            tutorial.step = 0;
             infoPanel.active = false;
 
-            // NPC: Professora
-            const professoraX = map.spawnPoint.x - 80;
-            const professoraY = map.spawnPoint.y - 120;
-            const professora = new NPC(professoraX, professoraY, {
-                name: 'Professora',
-                color: '#6B3FA0',
-                accentColor: '#2d1e4f',
-                width: 18, height: 26,
-                dialogueLines: [
-                    { speaker: 'Professora', text: 'Alex! Que bom que veio à biblioteca.' },
-                    { speaker: 'Professora', text: 'Seu trabalho é sobre a Inconfidência Mineira. Período crucial da história do Brasil!' },
-                    { speaker: 'Professora', text: 'Procure a bibliotecária, ela sabe onde estão os livros sobre o tema.' },
-                    { speaker: 'Alex', text: 'Pode deixar, professora!' },
-                ],
-                afterDialogueLines: [
-                    { speaker: 'Professora', text: 'Já falou com a bibliotecária? Os livros antigos estão na estante dos fundos.' },
-                ],
-                onInteractComplete: () => {
-                    gameState.talkedToTeacher = true;
-                    tutorial.setStep(2);
-                }
-            });
-            interactables.push(professora);
+            if (gameState.act === 3 && gameState.gameWon) {
+                // Fase Final: Quiz com a Professora
+                tutorial.active = false;
 
-            // NPC: Bibliotecária
-            const bibX = map.spawnPoint.x + 80;
-            const bibY = map.spawnPoint.y - 200;
-            const bibliotecaria = new NPC(bibX, bibY, {
-                name: 'Bibliotecária',
-                color: '#2E7D32',
-                accentColor: '#5d4037',
-                width: 18, height: 26,
-                dialogueLines: [
-                    { speaker: 'Bibliotecária', text: 'Olá, Alex! A professora me avisou que você viria.' },
-                    { speaker: 'Bibliotecária', text: 'Os livros sobre a Inconfidência estão na estante da direita, lá no fundo.' },
-                    { speaker: 'Bibliotecária', text: 'Mas cuidado... tem um livro antigo lá que é bem estranho. Ninguém consegue abri-lo.' },
-                    { speaker: 'Alex', text: 'Um livro estranho? Isso me deixou curioso...' },
-                ],
-                afterDialogueLines: [
-                    { speaker: 'Bibliotecária', text: 'O livro misterioso está na estante dos fundos, à direita.' },
-                ],
-                onInteractComplete: () => {
-                    gameState.talkedToLibrarian = true;
-                    tutorial.complete();
-                }
-            });
-            interactables.push(bibliotecaria);
-
-            // Item: Livro Antigo
-            const diario = map.mapObjects.find(o => o.name === 'item_diario');
-            if (diario) {
-                interactables.push(new Interactable(diario.x, diario.y, {
-                    name: 'Livro Antigo',
-                    width: diario.width, height: diario.height,
-                    isItem: true, glow: true, visible: true,
-                    glowColor: 'rgba(200, 150, 50, 0.6)',
+                // NPC: Bibliotecária (congratulações)
+                const bibX = map.spawnPoint.x + 80;
+                const bibY = map.spawnPoint.y - 200;
+                const bibliotecaria = new NPC(bibX, bibY, {
+                    name: 'Bibliotecária',
+                    color: '#2E7D32',
+                    accentColor: '#5d4037',
+                    width: 18, height: 26,
                     dialogueLines: [
-                        { speaker: 'Alex', text: 'Esse deve ser o livro que a bibliotecária mencionou...' },
-                        { speaker: 'Alex', text: 'Não tem título. Está emitindo um calor estranho...' },
-                        { speaker: '???', text: '"Quem lê isto foi escolhido. O passado precisa de você."' },
-                        { speaker: 'Alex', text: 'As letras estão brilhando! O que está acontecen—!' },
+                        { speaker: 'Bibliotecária', text: 'Você conseguiu voltar do livro, Alex! Que alívio!' },
+                        { speaker: 'Bibliotecária', text: 'Apresente o seu trabalho de história para a professora.' }
+                    ]
+                });
+                interactables.push(bibliotecaria);
+
+                // NPC: Professora (inicia o quiz)
+                const professoraX = map.spawnPoint.x - 80;
+                const professoraY = map.spawnPoint.y - 120;
+
+                const startQuiz = () => {
+                    dialogueBox.show([
+                        { speaker: 'Professora', text: 'Alex! Que bom que voltou. Terminou o seu trabalho de pesquisa?' },
+                        { speaker: 'Alex', text: 'Sim, professora! Descobri as verdades por trás de vários mitos e fake news históricas.' },
+                        { speaker: 'Professora', text: 'Excelente! Mas antes de aceitar seu trabalho, farei 3 perguntas rápidas para testar o seu aprendizado.' }
+                    ], askQ1);
+                };
+
+                const askQ1 = () => {
+                    dialogueBox.showChoices(
+                        'Professora',
+                        'Pergunta 1: Qual foi o estopim que deu início à Inconfidência Mineira em Vila Rica?',
+                        [
+                            'A proibição da venda de pão de queijo pela Rainha.',
+                            'A cobrança abusiva da Derrama pela Coroa Portuguesa.',
+                            'A criação de dentaduras mágicas de ouro por Tiradentes.'
+                        ],
+                        (choiceIdx) => {
+                            if (choiceIdx === 1) {
+                                dialogueBox.show([
+                                    { speaker: 'Professora', text: 'Correto! A cobrança forçada de impostos atrasados (Derrama) gerou a revolta.' }
+                                ], askQ2);
+                            } else {
+                                dialogueBox.show([
+                                    { speaker: 'Professora', text: 'Incorreto, Alex. Esse é um boato fictício. Vamos tentar novamente desde o começo.' }
+                                ], startQuiz);
+                            }
+                        }
+                    );
+                };
+
+                const askQ2 = () => {
+                    dialogueBox.showChoices(
+                        'Professora',
+                        'Pergunta 2: Quais grupos insatisfeitos iniciaram a Proclamação da República no Rio?',
+                        [
+                            'Militares, Igreja Católica e grandes fazendeiros de café.',
+                            'Vendedores de cocada e a família imperial exilada.',
+                            'Apoiadores de Silveira Martins por causa de rivalidade amorosa.'
+                        ],
+                        (choiceIdx) => {
+                            if (choiceIdx === 0) {
+                                dialogueBox.show([
+                                    { speaker: 'Professora', text: 'Perfeito! Esses três grupos influentes retiraram o apoio à Monarquia.' }
+                                ], askQ3);
+                            } else {
+                                dialogueBox.show([
+                                    { speaker: 'Professora', text: 'Incorreto. A rivalidade ou fofocas populares não derrubaram o Império. Vamos recomeçar o teste.' }
+                                ], startQuiz);
+                            }
+                        }
+                    );
+                };
+
+                const askQ3 = () => {
+                    dialogueBox.showChoices(
+                        'Professora',
+                        'Pergunta 3: Quais foram as reais consequências da assinatura da Lei Áurea em 1888?',
+                        [
+                            'Os libertos receberam indenizações imensas em ouro da Princesa Isabel.',
+                            'A maior parte fugiu a pé para o Uruguai em busca de terras.',
+                            'Os libertos foram abandonados sem terras, salários ou educação formal.'
+                        ],
+                        (choiceIdx) => {
+                            if (choiceIdx === 2) {
+                                dialogueBox.show([
+                                    { speaker: 'Professora', text: 'Sensacional, Alex! Você realmente compreendeu os fatos e a complexidade social da nossa história.' },
+                                    { speaker: 'Professora', text: 'Seu trabalho está nota 10 com louvor! Parabéns!' },
+                                    { speaker: 'Alex', text: 'Muito obrigado, professora! Valeu muito a pena pesquisar a fundo!' }
+                                ], () => {
+                                    loadScene('vitoria');
+                                });
+                            } else {
+                                dialogueBox.show([
+                                    { speaker: 'Professora', text: 'Incorreto, Alex. Pense na realidade social precária no pós-abolição. Vamos recomeçar.' }
+                                ], startQuiz);
+                            }
+                        }
+                    );
+                };
+
+                const professora = new NPC(professoraX, professoraY, {
+                    name: 'Professora',
+                    color: '#6B3FA0',
+                    accentColor: '#2d1e4f',
+                    width: 18, height: 26,
+                    dialogueLines: [
+                        { speaker: 'Professora', text: 'Olá, Alex! Veio entregar o seu trabalho de história?' }
+                    ],
+                    onInteractComplete: startQuiz
+                });
+                interactables.push(professora);
+
+            } else {
+                // Tutorial / Início normal do jogo
+                tutorial.active = true;
+                tutorial.step = 0;
+
+                // NPC: Professora (normal)
+                const professoraX = map.spawnPoint.x - 80;
+                const professoraY = map.spawnPoint.y - 120;
+                const professora = new NPC(professoraX, professoraY, {
+                    name: 'Professora',
+                    color: '#6B3FA0',
+                    accentColor: '#2d1e4f',
+                    width: 18, height: 26,
+                    dialogueLines: [
+                        { speaker: 'Professora', text: 'Alex! Que bom que veio à biblioteca.' },
+                        { speaker: 'Professora', text: 'Seu trabalho é sobre a Inconfidência Mineira. Período crucial da história do Brasil!' },
+                        { speaker: 'Professora', text: 'Procure a bibliotecária, ela sabe onde estão os livros sobre o tema.' },
+                        { speaker: 'Alex', text: 'Pode deixar, professora!' },
+                    ],
+                    afterDialogueLines: [
+                        { speaker: 'Professora', text: 'Já falou com a bibliotecária? Os livros antigos estão na estante dos fundos.' },
                     ],
                     onInteractComplete: () => {
-                        gameState.bookFound = true;
-                        loadScene('templo');
+                        gameState.talkedToTeacher = true;
+                        tutorial.setStep(2);
                     }
-                }));
+                });
+                interactables.push(professora);
+
+                // NPC: Bibliotecária (normal)
+                const bibX = map.spawnPoint.x + 80;
+                const bibY = map.spawnPoint.y - 200;
+                const bibliotecaria = new NPC(bibX, bibY, {
+                    name: 'Bibliotecária',
+                    color: '#2E7D32',
+                    accentColor: '#5d4037',
+                    width: 18, height: 26,
+                    dialogueLines: [
+                        { speaker: 'Bibliotecária', text: 'Olá, Alex! A professora me avisou que você viria.' },
+                        { speaker: 'Bibliotecária', text: 'Os livros sobre a Inconfidência estão na estante da direita, lá no fundo.' },
+                        { speaker: 'Bibliotecária', text: 'Mas cuidado... tem um livro antigo lá que é bem estranho. Ninguém consegue abri-lo.' },
+                        { speaker: 'Alex', text: 'Um livro estranho? Isso me deixou curioso...' },
+                    ],
+                    afterDialogueLines: [
+                        { speaker: 'Bibliotecária', text: 'O livro misterioso está na estante dos fundos, à direita.' },
+                    ],
+                    onInteractComplete: () => {
+                        gameState.talkedToLibrarian = true;
+                        tutorial.complete();
+                    }
+                });
+                interactables.push(bibliotecaria);
+
+                // Item: Livro Antigo
+                const diario = map.mapObjects.find(o => o.name === 'item_diario');
+                if (diario) {
+                    interactables.push(new Interactable(diario.x, diario.y, {
+                        name: 'Livro Antigo',
+                        width: diario.width, height: diario.height,
+                        isItem: true, glow: true, visible: true,
+                        glowColor: 'rgba(200, 150, 50, 0.6)',
+                        dialogueLines: [
+                            { speaker: 'Alex', text: 'Esse deve ser o livro que a bibliotecária mencionou...' },
+                            { speaker: 'Alex', text: 'Não tem título. Está emitindo um calor estranho...' },
+                            { speaker: '???', text: '"Quem lê isto foi escolhido. O passado precisa de você."' },
+                            { speaker: 'Alex', text: 'As letras estão brilhando! O que está acontecen—!' },
+                        ],
+                        onInteractComplete: () => {
+                            gameState.bookFound = true;
+                            loadScene('templo');
+                        }
+                    }));
+                }
             }
         }
     },
@@ -201,9 +323,7 @@ const SCENES = {
     templo: {
         file: 'templo.tmj',
         setup(map) {
-            // Spawn centralizado no corredor entre as duas colisões (colisao4 e colisao5)
-            // O spawn_player do TMJ está em (446,578), mas fica encostado na borda de colisao4.
-            // Empurramos para o centro do corredor seguro (x ~480, y ~460).
+            // Spawn centralizado no corredor
             alex.x = map.spawnPoint.x + 34;
             alex.y = map.spawnPoint.y - 120;
             alex.resolveCollision(gameMap);
@@ -228,10 +348,10 @@ const SCENES = {
                     { speaker: 'Alex', text: 'Mentiras? Como assim?' },
                     { speaker: 'Clio', text: 'Fake news, Alex. Elas não são coisa de hoje. Existem desde que a história é contada.' },
                     { speaker: 'Clio', text: 'A névoa mistura verdades com mentiras até que ninguém saiba mais o que é real.' },
-                    { speaker: 'Clio', text: 'Preciso que você vá à Vila Rica de 1789 e descubra a verdade sobre a Inconfidência Mineira.' },
+                    { speaker: 'Clio', text: 'Preciso que você vai à Vila Rica de 1789 e descubra a verdade sobre a Inconfidência Mineira.' },
                     { speaker: 'Alex', text: 'E como eu faço isso?' },
                     { speaker: 'Clio', text: 'Converse com as pessoas de lá. Colete informações. Mas cuidado — nem tudo que ouvir é verdade.' },
-                    { speaker: 'Clio', text: 'Quando tiver todas as informações, volte aqui. Eu vou te ajudar a separar verdade de mentira. Vá agora!' },
+                    { speaker: 'Clio', text: 'Quando tiver todas as informações, volte aqui. Eu vou te ajudar a separar verdade de mentira. Vá agora!' }
                 ];
                 clio.onInteractComplete = () => {
                     gameState.clioMet = true;
@@ -246,49 +366,119 @@ const SCENES = {
                 clio.hasBeenIntroduced = true;
 
                 if (gameState.hasAllInfos()) {
-                    // Tem todas as infos → iniciar puzzle
-                    clio.dialogueLines = [
-                        { speaker: 'Clio', text: 'Você coletou todas as informações! Agora é hora do desafio.' },
-                        { speaker: 'Clio', text: 'Identifique: qual informação deu INÍCIO ao movimento e qual ENCERROU.' },
-                        { speaker: 'Clio', text: 'Concentre-se... a névoa de mentiras é traiçoeira.' },
-                    ];
-                    clio.onInteractComplete = () => {
-                        puzzleUI.start(
-                            // Acertou
-                            () => {
-                                dialogueBox.show([
-                                    { speaker: 'Clio', text: '🎉 Você dissipou a névoa! A verdade sobre a Inconfidência Mineira está segura!' },
-                                    { speaker: 'Clio', text: 'A Derrama provocou a revolta, e a traição de Silvério dos Reis a encerrou.' },
-                                    { speaker: 'Clio', text: 'Parabéns, Alex! O passado está a salvo... por enquanto.' },
-                                    { speaker: 'Alex', text: 'Isso foi incrível! E agora?' },
-                                    { speaker: 'Clio', text: 'Agora, a sua missão continua no Império do Brasil... Prepare-se para o Rio de Janeiro!' }
-                                ], () => {
+                    if (gameState.act === 3) {
+                        // São Paulo (Lei Áurea)
+                        clio.dialogueLines = [
+                            { speaker: 'Clio', text: 'Você coletou as informações sobre a Lei Áurea em São Paulo!' },
+                            { speaker: 'Clio', text: 'Identifique: qual fato deu INÍCIO ao movimento abolicionista e qual representou as consequências pós-abolição.' },
+                            { speaker: 'Clio', text: 'A desinformação também distorceu muito esse momento marcante da nossa história.' }
+                        ];
+                        clio.onInteractComplete = () => {
+                            puzzleUI.start(
+                                // Acertou
+                                () => {
+                                    dialogueBox.show([
+                                        { speaker: 'Clio', text: '🎉 Excelente, Alex! A verdade sobre a Lei Áurea foi reestabelecida!' },
+                                        { speaker: 'Clio', text: 'A luta popular e a resistência dos quilombos forçaram a abolição, e a falta de amparo social marcou suas consequências.' },
+                                        { speaker: 'Clio', text: 'Você protegeu com sucesso os três períodos históricos da nossa investigação!' },
+                                        { speaker: 'Alex', text: 'Conseguimos! Agora posso voltar para a biblioteca e entregar meu trabalho de escola?' },
+                                        { speaker: 'Clio', text: 'Sim, Alex. O portal o guiará de volta ao seu tempo na biblioteca. Mas fique atento: sua professora o aguarda para avaliar o seu aprendizado!' }
+                                    ], () => {
+                                        // Resetar informações coletadas para a biblioteca e carregar biblioteca
+                                        gameState.collectedInfos = [];
+                                        loadScene('biblioteca');
+                                    });
+                                },
+                                // Errou
+                                () => {
+                                    gameState.collectedInfos = [];
+                                    loadScene('sao_paulo');
+                                }
+                            );
+                        };
+                    } else if (gameState.act === 2) {
+                        // Rio de Janeiro (República)
+                        clio.dialogueLines = [
+                            { speaker: 'Clio', text: 'Você coletou as informações sobre a República no Rio de Janeiro!' },
+                            { speaker: 'Clio', text: 'Identifique: qual fato deu INÍCIO ao movimento e qual consolidou o FIM do Império.' },
+                            { speaker: 'Clio', text: 'Pense bem... a desinformação e os boatos eram muito fortes nessa época.' }
+                        ];
+                        clio.onInteractComplete = () => {
+                            puzzleUI.start(
+                                // Acertou
+                                () => {
+                                    dialogueBox.show([
+                                        { speaker: 'Clio', text: '🎉 Incrível, Alex! Você dissipou a névoa da Proclamação da República!' },
+                                        { speaker: 'Clio', text: 'A insatisfação dos três grupos começou a queda, e o exílio da família real em 2 dias encerrou a Monarquia.' },
+                                        { speaker: 'Clio', text: 'Você protegeu a história do Brasil de ser distorcida ou esquecida!' },
+                                        { speaker: 'Alex', text: 'Isso foi demais! Sinto que entendi muito melhor como nossa República começou.' },
+                                        { speaker: 'Clio', text: 'Sua jornada, contudo, ainda não acabou. Há um último foco de névoa no século XIX...' },
+                                        { speaker: 'Clio', text: 'Precisamos ir a São Paulo, em 1888, para desvendar a verdade sobre a assinatura da Lei Áurea.' }
+                                    ], () => {
+                                        gameState.act = 3;
+                                        gameState.collectedInfos = [];
+                                        loadScene('sao_paulo');
+                                    });
+                                },
+                                // Errou
+                                () => {
+                                    gameState.collectedInfos = [];
                                     loadScene('rio_de_janeiro');
-                                });
-                            },
-                            // Errou → voltar à Vila Rica
-                            () => {
-                                gameState.collectedInfos = [];
-                                loadScene('vila_rica');
-                            }
-                        );
-                    };
+                                }
+                            );
+                        };
+                    } else {
+                        // Vila Rica (Inconfidência)
+                        clio.dialogueLines = [
+                            { speaker: 'Clio', text: 'Você coletou todas as informações! Agora é hora do desafio.' },
+                            { speaker: 'Clio', text: 'Identifique: qual informação deu INÍCIO ao movimento e qual ENCERROU.' },
+                            { speaker: 'Clio', text: 'Concentre-se... a névoa de mentiras é traiçoeira.' }
+                        ];
+                        clio.onInteractComplete = () => {
+                            puzzleUI.start(
+                                // Acertou
+                                () => {
+                                    dialogueBox.show([
+                                        { speaker: 'Clio', text: '🎉 Você dissipou a névoa! A verdade sobre a Inconfidência Mineira está segura!' },
+                                        { speaker: 'Clio', text: 'A Derrama provocou a revolta, e a traição de Silvério dos Reis a encerrou.' },
+                                        { speaker: 'Clio', text: 'Parabéns, Alex! O passado está a salvo... por enquanto.' },
+                                        { speaker: 'Alex', text: 'Isso foi incrível! E agora?' },
+                                        { speaker: 'Clio', text: 'Agora, a sua missão continua no Império do Brasil... Prepare-se para o Rio de Janeiro!' }
+                                    ], () => {
+                                        gameState.act = 2;
+                                        gameState.collectedInfos = [];
+                                        loadScene('rio_de_janeiro');
+                                    });
+                                },
+                                // Errou
+                                () => {
+                                    gameState.collectedInfos = [];
+                                    loadScene('vila_rica');
+                                }
+                            );
+                        };
+                    }
                 } else {
+                    const total = gameState.getRequiredInfoCount();
+                    const phaseName = gameState.act === 3 ? 'São Paulo' : (gameState.act === 2 ? 'Rio de Janeiro' : 'Vila Rica');
+                    const targetScene = gameState.act === 3 ? 'sao_paulo' : (gameState.act === 2 ? 'rio_de_janeiro' : 'vila_rica');
                     clio.dialogueLines = [
-                        { speaker: 'Clio', text: `Você coletou ${gameState.getInfoCount()} de 4 informações.` },
-                        { speaker: 'Clio', text: 'Volte à Vila Rica e converse com mais pessoas.' },
+                        { speaker: 'Clio', text: `Você coletou ${gameState.getInfoCount()} de ${total} informações.` },
+                        { speaker: 'Clio', text: `Volte a ${phaseName} e converse com mais pessoas para desvendar a verdade.` }
                     ];
                 }
                 interactables.push(clio);
             }
 
-            // Portal para Vila Rica (somente se não venceu o jogo ainda)
+            // Portal dinâmico
             if (gameState.clioMet && !gameState.gameWon) {
+                const targetScene = gameState.act === 3 ? 'sao_paulo' : (gameState.act === 2 ? 'rio_de_janeiro' : 'vila_rica');
+                const targetName = gameState.act === 3 ? 'São Paulo — 1888' : (gameState.act === 2 ? 'Rio de Janeiro — 1889' : 'Vila Rica — 1789');
                 interactables.push(new Interactable(map.spawnPoint.x, map.spawnPoint.y + 20, {
-                    name: 'Portal Vila Rica',
+                    name: 'Portal ' + targetName,
                     width: 40, height: 10,
-                    dialogueLines: [{ speaker: 'Alex', text: '[Viajar para Vila Rica — 1789]' }],
-                    onInteractComplete: () => loadScene('vila_rica')
+                    dialogueLines: [{ speaker: 'Alex', text: `[Viajar para ${targetName}]` }],
+                    onInteractComplete: () => loadScene(targetScene)
                 }));
             }
         }
@@ -323,7 +513,7 @@ const SCENES = {
             // NPC 4: Vendedor do Mercado (na estátua de Tiradentes)
             const estatua = map.mapObjects.find(o => o.name === 'estatua_tiradentes');
             if (estatua) {
-                const info = GameState.INFO_DATA[3]; // pao_de_queijo
+                const info = GameState.INFO_DATA.vila_rica[3]; // pao_de_queijo
                 const vendedor = new NPC(estatua.x - 10, estatua.y + 30, {
                     name: 'Vendedor',
                     color: '#8B4513',
@@ -383,17 +573,7 @@ const SCENES = {
                 }));
             }
 
-            // Portal → Templo (quando tem todas as infos, ou para voltar)
-            if (gameState.hasAllInfos()) {
-                interactables.push(new Interactable(map.spawnPoint.x, map.spawnPoint.y - 5, {
-                    name: 'Portal Templo',
-                    width: 24, height: 14,
-                    visible: true, glow: true, isItem: true,
-                    glowColor: 'rgba(180, 130, 255, 0.6)',
-                    dialogueLines: [{ speaker: 'Alex', text: '[Voltar ao Templo com as informações]' }],
-                    onInteractComplete: () => loadScene('templo')
-                }));
-            }
+            // Nota: Portal para o Templo é agora criado dinamicamente no update() quando todas as infos forem coletadas
         }
     },
 
@@ -408,7 +588,7 @@ const SCENES = {
             interactables = [];
             infoPanel.active = true;
 
-            const info = GameState.INFO_DATA[0]; // derrama
+            const info = GameState.INFO_DATA.vila_rica[0]; // derrama
             const poetaItem = map.mapObjects.find(o => o.name === 'poeta_item');
             const npcX = poetaItem ? poetaItem.x + 10 : map.spawnPoint.x + 40;
             const npcY = poetaItem ? poetaItem.y + 30 : map.spawnPoint.y - 60;
@@ -464,7 +644,7 @@ const SCENES = {
             interactables = [];
             infoPanel.active = true;
 
-            const info = GameState.INFO_DATA[2]; // traicao
+            const info = GameState.INFO_DATA.vila_rica[2]; // traicao
             const confissao = map.mapObjects.find(o => o.name === 'item_confissao');
             const npcX = confissao ? confissao.x + 10 : 150;
             const npcY = confissao ? confissao.y + 30 : 80;
@@ -480,7 +660,7 @@ const SCENES = {
                     { speaker: 'Espião', text: 'Digamos que eu sei de coisas que outros gostariam de esconder...' },
                     { speaker: 'Espião', text: 'Os planos de liberdade foram interrompidos antes mesmo da revolta começar.' },
                     { speaker: 'Espião', text: 'Um dos participantes, Joaquim Silvério dos Reis, resolveu trair seus companheiros.' },
-                    { speaker: 'Espião', text: 'Ele revelou todo o segredo ao governador de Minas Gerais em troca do perdão de suas dívidas.' },
+                    { speaker: 'Espião', text: 'Ele revelou todo o segredo ao governador de Minas Gerais em troca do perdão de suas dívidas com Portugal.' },
                     { speaker: 'Alex', text: 'Um traidor?! Silvério dos Reis entregou todo mundo!' },
                     { speaker: 'Espião', text: 'Silêncio! As paredes têm ouvidos...' },
                 ],
@@ -523,7 +703,7 @@ const SCENES = {
             interactables = [];
             infoPanel.active = true;
 
-            const info = GameState.INFO_DATA[1]; // dentaduras
+            const info = GameState.INFO_DATA.vila_rica[1]; // dentaduras
             const itemMapa = map.mapObjects.find(o => o.name === 'item_mapa');
             const npcX = itemMapa ? itemMapa.x - 30 : map.spawnPoint.x + 40;
             const npcY = itemMapa ? itemMapa.y + 20 : map.spawnPoint.y - 80;
@@ -572,31 +752,415 @@ const SCENES = {
     },
 
     // ─────────────────────────────────────────────
-    // RIO DE JANEIRO (Fase 2)
+    // RIO DE JANEIRO (Paço Imperial — Fase 2)
     // ─────────────────────────────────────────────
     rio_de_janeiro: {
-        file: 'praca.tmj', // Reutilizando a praça temporariamente para a segunda fase
+        file: 'pacoimperial.tmj',
         setup(map) {
             alex.x = map.spawnPoint.x;
             alex.y = map.spawnPoint.y;
             interactables = [];
             gameState.currentPhase = 'rio_de_janeiro';
-            infoPanel.active = false;
+            infoPanel.active = true;
             tutorial.active = false;
 
-            const carioca = new NPC(map.spawnPoint.x + 30, map.spawnPoint.y - 10, {
-                name: 'Carioca',
+            // 1. Quintino Bocaiúva (Jornalista)
+            const infoQuintino = GameState.INFO_DATA.rio_de_janeiro[0]; // republica_inicio (VERDADEIRA)
+            const quintino = new NPC(460, 150, {
+                name: 'Quintino Bocaiúva',
                 color: '#1E88E5',
                 accentColor: '#0D47A1',
                 width: 16, height: 24,
                 dialogueLines: [
-                    { speaker: 'Carioca', text: 'Bem-vindo ao Rio de Janeiro, a capital do Império do Brasil!' },
-                    { speaker: 'Carioca', text: 'Aqui nós temos a Família Real e muito pão de açúcar. E não estou falando da montanha!' },
-                    { speaker: 'Alex', text: 'Uau! Eu consegui chegar na Fase 2!' },
-                    { speaker: 'Carioca', text: 'Exato! A Fase 2 está em construção, mas em breve teremos novos mistérios aqui.' }
-                ]
+                    { speaker: 'Quintino', text: 'Cidadão! Escreva o que digo: o Império desmorona sob o próprio peso.' },
+                    { speaker: 'Alex', text: 'Como tudo isso começou, senhor?' },
+                    { speaker: 'Quintino', text: infoQuintino.text },
+                    { speaker: 'Alex', text: 'Entendi. Grupos muito fortes retiraram o apoio à monarquia.' },
+                    { speaker: 'Quintino', text: 'Exatamente! A história está se movendo no Rio de Janeiro.' }
+                ],
+                afterDialogueLines: [
+                    { speaker: 'Quintino', text: 'Igreja, militares e cafeicultores... sem eles, o trono de Dom Pedro II cai!' }
+                ],
+                infoData: infoQuintino,
+                onInteractComplete: () => {
+                    if (gameState.addInfo(infoQuintino)) {
+                        infoPanel.notifyNewInfo(infoQuintino.title);
+                    }
+                }
             });
-            interactables.push(carioca);
+            interactables.push(quintino);
+
+            // 2. Aristocrata Fofoqueiro
+            const infoAristocrata = GameState.INFO_DATA.rio_de_janeiro[1]; // republica_rival (FALSA)
+            const aristocrata = new NPC(460, 250, {
+                name: 'Aristocrata',
+                color: '#F57C00',
+                accentColor: '#E65100',
+                width: 16, height: 24,
+                dialogueLines: [
+                    { speaker: 'Aristocrata', text: 'Você sabe do último babado do Paço?' },
+                    { speaker: 'Alex', text: 'Que babado?' },
+                    { speaker: 'Aristocrata', text: infoAristocrata.text },
+                    { speaker: 'Alex', text: 'Uma mentira amorosa motivou o Marechal? Hum...' }
+                ],
+                afterDialogueLines: [
+                    { speaker: 'Aristocrata', text: 'O amor de uma mulher move exércitos, garoto! Lembre-se disso.' }
+                ],
+                infoData: infoAristocrata,
+                onInteractComplete: () => {
+                    if (gameState.addInfo(infoAristocrata)) {
+                        infoPanel.notifyNewInfo(infoAristocrata.title);
+                    }
+                }
+            });
+            interactables.push(aristocrata);
+
+            // 3. Vendedor Ambulante
+            const infoVendedor = GameState.INFO_DATA.rio_de_janeiro[3]; // republica_eleicao (FALSA)
+            const vendedor = new NPC(460, 350, {
+                name: 'Ambulante',
+                color: '#795548',
+                accentColor: '#3E2723',
+                width: 16, height: 24,
+                dialogueLines: [
+                    { speaker: 'Ambulante', text: 'Olha a cocada fresquinha! Aproveite que a votação está aberta!' },
+                    { speaker: 'Alex', text: 'Votação? Que votação?' },
+                    { speaker: 'Ambulante', text: infoVendedor.text },
+                    { speaker: 'Alex', text: 'Eleição na Praça XV? Acho que isso não está certo...' }
+                ],
+                afterDialogueLines: [
+                    { speaker: 'Ambulante', text: 'Monarquia ou República? Compre uma cocada e vote na urna da praça!' }
+                ],
+                infoData: infoVendedor,
+                onInteractComplete: () => {
+                    if (gameState.addInfo(infoVendedor)) {
+                        infoPanel.notifyNewInfo(infoVendedor.title);
+                    }
+                }
+            });
+            interactables.push(vendedor);
+
+            // 4. Guarda Imperial
+            const infoGuarda = GameState.INFO_DATA.rio_de_janeiro[4]; // republica_disfarce (FALSA)
+            const guarda = new NPC(460, 430, {
+                name: 'Guarda do Paço',
+                color: '#3F51B5',
+                accentColor: '#1A237E',
+                width: 16, height: 24,
+                dialogueLines: [
+                    { speaker: 'Guarda', text: 'Circulando, cidadão! O Paço está sob guarda militar!' },
+                    { speaker: 'Alex', text: 'O Imperador ainda está lá dentro?' },
+                    { speaker: 'Guarda', text: infoGuarda.text },
+                    { speaker: 'Alex', text: 'Disfarçado de vendedor de cocadas? Essa história é muito absurda.' }
+                ],
+                afterDialogueLines: [
+                    { speaker: 'Guarda', text: 'Aquela barba branca não enganaria ninguém!' }
+                ],
+                infoData: infoGuarda,
+                onInteractComplete: () => {
+                    if (gameState.addInfo(infoGuarda)) {
+                        infoPanel.notifyNewInfo(infoGuarda.title);
+                    }
+                }
+            });
+            interactables.push(guarda);
+
+            // 5. Baronesa do Café
+            const infoBaronesa = GameState.INFO_DATA.rio_de_janeiro[5]; // republica_carta (FALSA)
+            const baronesa = new NPC(460, 490, {
+                name: 'Baronesa',
+                color: '#9C27B0',
+                accentColor: '#4A148C',
+                width: 16, height: 24,
+                dialogueLines: [
+                    { speaker: 'Baronesa', text: 'Que horror! A nossa ordem monárquica destruída por uma carta!' },
+                    { speaker: 'Alex', text: 'Que carta, senhora?' },
+                    { speaker: 'Baronesa', text: infoBaronesa.text },
+                    { speaker: 'Alex', text: 'A Princesa Isabel ordenou a República? Isso não faz sentido algum.' }
+                ],
+                afterDialogueLines: [
+                    { speaker: 'Baronesa', text: 'Isabel abdicou do trono por preguiça? Ai, que decadência aristocrática!' }
+                ],
+                infoData: infoBaronesa,
+                onInteractComplete: () => {
+                    if (gameState.addInfo(infoBaronesa)) {
+                        infoPanel.notifyNewInfo(infoBaronesa.title);
+                    }
+                }
+            });
+            interactables.push(baronesa);
+
+            // 6. Marechal Deodoro da Fonseca (posicionado diretamente no Paço Imperial)
+            const infoDeodoro = GameState.INFO_DATA.rio_de_janeiro[2]; // republica_fim (VERDADEIRA)
+            const deodoro = new NPC(460, 100, {
+                name: 'Marechal Deodoro',
+                color: '#2E7D32',
+                accentColor: '#1B5E20',
+                width: 16, height: 24,
+                dialogueLines: [
+                    { speaker: 'Deodoro', text: 'Quem está aí? Identifique-se cidadão!' },
+                    { speaker: 'Alex', text: 'Eu sou Alex, senhor. Queria saber o que aconteceu com o Império.' },
+                    { speaker: 'Deodoro', text: 'O Império caiu, rapaz. O tempo da monarquia no Brasil expirou.' },
+                    { speaker: 'Deodoro', text: infoDeodoro.text },
+                    { speaker: 'Alex', text: 'Apenas dois dias para que Dom Pedro II e sua família partissem?!' },
+                    { speaker: 'Deodoro', text: 'A pátria exigia pressa para evitar novos conflitos. A República está instaurada!' }
+                ],
+                afterDialogueLines: [
+                    { speaker: 'Deodoro', text: 'O Marechal Deodoro da Fonseca não volta atrás em sua palavra. O Brasil é livre.' }
+                ],
+                infoData: infoDeodoro,
+                onInteractComplete: () => {
+                    if (gameState.addInfo(infoDeodoro)) {
+                        infoPanel.notifyNewInfo(infoDeodoro.title);
+                    }
+                }
+            });
+            interactables.push(deodoro);
+
+            // Nota: Portal para o Templo é agora criado dinamicamente no update() quando todas as infos forem coletadas
+        }
+    },
+
+    // ─────────────────────────────────────────────
+    // SÃO PAULO (Salão da Abolição — Fase 3 / Lei Áurea)
+    // ─────────────────────────────────────────────
+    sao_paulo: {
+        file: 'gabineterepublica.tmj', // Reutiliza o mapa do salão gabinete
+        setup(map) {
+            alex.x = map.spawnPoint.x;
+            alex.y = map.spawnPoint.y;
+            interactables = [];
+            gameState.currentPhase = 'sao_paulo';
+            infoPanel.active = true;
+            tutorial.active = false;
+
+            // 1. José do Patrocínio (Abolicionista) - (450, 200)
+            const infoPatrocinio = GameState.INFO_DATA.sao_paulo[0]; // leiaurea_inicio (VERDADEIRA)
+            const patrocinio = new NPC(450, 200, {
+                name: 'José do Patrocínio',
+                color: '#3E2723',
+                accentColor: '#1B0000',
+                width: 16, height: 24,
+                dialogueLines: [
+                    { speaker: 'José do Patrocínio', text: 'Alex! A abolição não foi uma concessão real. Foi conquistada a duras penas.' },
+                    { speaker: 'Alex', text: 'Como assim? Não foi a Princesa Isabel quem decidiu tudo sozinha?' },
+                    { speaker: 'José do Patrocínio', text: infoPatrocinio.text },
+                    { speaker: 'Alex', text: 'Entendi! A pressão do povo e dos abolicionistas foi o verdadeiro motor.' }
+                ],
+                afterDialogueLines: [
+                    { speaker: 'José do Patrocínio', text: 'O Movimento Abolicionista e as lutas populares forçaram o fim desse sistema!' }
+                ],
+                infoData: infoPatrocinio,
+                onInteractComplete: () => {
+                    if (gameState.addInfo(infoPatrocinio)) {
+                        infoPanel.notifyNewInfo(infoPatrocinio.title);
+                    }
+                }
+            });
+            interactables.push(patrocinio);
+
+            // 2. Duquesa Imperial - (350, 250)
+            const infoDuquesa = GameState.INFO_DATA.sao_paulo[1]; // leiaurea_caneta (FALSA)
+            const duquesa = new NPC(350, 250, {
+                name: 'Duquesa Imperial',
+                color: '#D81B60',
+                accentColor: '#880E4F',
+                width: 16, height: 24,
+                dialogueLines: [
+                    { speaker: 'Duquesa', text: 'Você soube da caneta majestosa usada para assinar a lei?' },
+                    { speaker: 'Alex', text: 'Como ela era?' },
+                    { speaker: 'Duquesa', text: infoDuquesa.text },
+                    { speaker: 'Alex', text: 'Uma caneta pesando um quilo? Que exagero de história...' }
+                ],
+                afterDialogueLines: [
+                    { speaker: 'Duquesa', text: 'Foi um marco de luxo, meu jovem! Ouro maciço e brilhantes.' }
+                ],
+                infoData: infoDuquesa,
+                onInteractComplete: () => {
+                    if (gameState.addInfo(infoDuquesa)) {
+                        infoPanel.notifyNewInfo(infoDuquesa.title);
+                    }
+                }
+            });
+            interactables.push(duquesa);
+
+            // 3. Joaquim Nabuco (Político abolicionista) - (550, 250)
+            const infoNabuco = GameState.INFO_DATA.sao_paulo[2]; // leiaurea_fim (VERDADEIRA)
+            const nabuco = new NPC(550, 250, {
+                name: 'Joaquim Nabuco',
+                color: '#0D47A1',
+                accentColor: '#002171',
+                width: 16, height: 24,
+                dialogueLines: [
+                    { speaker: 'Joaquim Nabuco', text: 'A Lei Áurea trouxe a liberdade jurídica, mas não a igualdade de fato.' },
+                    { speaker: 'Alex', text: 'O que aconteceu com os libertos no dia seguinte?' },
+                    { speaker: 'Joaquim Nabuco', text: infoNabuco.text },
+                    { speaker: 'Alex', text: 'Entendi. A liberdade veio sem nenhuma garantia de direitos básicos ou sustento.' }
+                ],
+                afterDialogueLines: [
+                    { speaker: 'Joaquim Nabuco', text: 'A Lei de 1888 foi o fim do regime oficial, mas o início de uma longa exclusão social.' }
+                ],
+                infoData: infoNabuco,
+                onInteractComplete: () => {
+                    if (gameState.addInfo(infoNabuco)) {
+                        infoPanel.notifyNewInfo(infoNabuco.title);
+                    }
+                }
+            });
+            interactables.push(nabuco);
+
+            // 4. Fazendeiro de Café - (300, 400)
+            const infoFazendeiro = GameState.INFO_DATA.sao_paulo[3]; // leiaurea_indeniza (FALSA)
+            const fazendeiro = new NPC(300, 400, {
+                name: 'Fazendeiro de Café',
+                color: '#4E342E',
+                accentColor: '#270F0A',
+                width: 16, height: 24,
+                dialogueLines: [
+                    { speaker: 'Fazendeiro', text: 'A Princesa Isabel acabou com os cofres do governo!' },
+                    { speaker: 'Alex', text: 'Por que o senhor diz isso?' },
+                    { speaker: 'Fazendeiro', text: infoFazendeiro.text },
+                    { speaker: 'Alex', text: 'Duvido muito que o Império tenha pago indenizações generosas aos libertos.' }
+                ],
+                afterDialogueLines: [
+                    { speaker: 'Fazendeiro', text: 'Ela foi benevolente demais! Nos deixou sem mão de obra e distribuiu fortunas!' }
+                ],
+                infoData: infoFazendeiro,
+                onInteractComplete: () => {
+                    if (gameState.addInfo(infoFazendeiro)) {
+                        infoPanel.notifyNewInfo(infoFazendeiro.title);
+                    }
+                }
+            });
+            interactables.push(fazendeiro);
+
+            // 5. Senador Conservador - (600, 400)
+            const infoSenador = GameState.INFO_DATA.sao_paulo[4]; // leiaurea_votacao (FALSA)
+            const senador = new NPC(600, 400, {
+                name: 'Senador Conservador',
+                color: '#37474F',
+                accentColor: '#102027',
+                width: 16, height: 24,
+                dialogueLines: [
+                    { speaker: 'Senador', text: 'A aprovação da Lei Áurea seguiu uma transição prudente no Parlamento.' },
+                    { speaker: 'Alex', text: 'Não foi imediata para todos?' },
+                    { speaker: 'Senador', text: infoSenador.text },
+                    { speaker: 'Alex', text: 'Isso não faz sentido. A Lei Áurea declarou extinta a escravidão a partir de sua data de publicação.' }
+                ],
+                afterDialogueLines: [
+                    { speaker: 'Senador', text: 'Manter a transição gradual era fundamental para os proprietários rurais.' }
+                ],
+                infoData: infoSenador,
+                onInteractComplete: () => {
+                    if (gameState.addInfo(infoSenador)) {
+                        infoPanel.notifyNewInfo(infoSenador.title);
+                    }
+                }
+            });
+            interactables.push(senador);
+
+            // 6. Cidadão Festivo - (700, 300)
+            const infoCidadao = GameState.INFO_DATA.sao_paulo[5]; // leiaurea_dia (FALSA)
+            const cidadao = new NPC(700, 300, {
+                name: 'Cidadão Festivo',
+                color: '#FFB300',
+                accentColor: '#FF6F00',
+                width: 16, height: 24,
+                dialogueLines: [
+                    { speaker: 'Cidadão', text: 'Hoje é dia de comemoração nacional obrigatória!' },
+                    { speaker: 'Alex', text: 'Como assim obrigatória?' },
+                    { speaker: 'Cidadão', text: infoCidadao.text },
+                    { speaker: 'Alex', text: 'Multa por não vestir branco e dançar? Isso soa totalmente falso.' }
+                ],
+                afterDialogueLines: [
+                    { speaker: 'Cidadão', text: 'Todo mundo na praça celebrando! Quem não dançar é contra a pátria!' }
+                ],
+                infoData: infoCidadao,
+                onInteractComplete: () => {
+                    if (gameState.addInfo(infoCidadao)) {
+                        infoPanel.notifyNewInfo(infoCidadao.title);
+                    }
+                }
+            });
+            interactables.push(cidadao);
+
+            // 7. Negociador Inglês - (250, 500)
+            const infoNegociador = GameState.INFO_DATA.sao_paulo[6]; // leiaurea_compra (FALSA)
+            const negociador = new NPC(250, 500, {
+                name: 'Negociador Inglês',
+                color: '#E53935',
+                accentColor: '#7F0000',
+                width: 16, height: 24,
+                dialogueLines: [
+                    { speaker: 'Negociador', text: 'A liberdade no Brasil tem o patrocínio britânico, rapaz.' },
+                    { speaker: 'Alex', text: 'Como a Inglaterra atuou na assinatura da lei?' },
+                    { speaker: 'Negociador', text: infoNegociador.text },
+                    { speaker: 'Alex', text: 'Comprar e alugar de volta? Esse boato é completamente mentiroso.' }
+                ],
+                afterDialogueLines: [
+                    { speaker: 'Negociador', text: 'Tudo é business! O império britânico manda no mercado internacional.' }
+                ],
+                infoData: infoNegociador,
+                onInteractComplete: () => {
+                    if (gameState.addInfo(infoNegociador)) {
+                        infoPanel.notifyNewInfo(infoNegociador.title);
+                    }
+                }
+            });
+            interactables.push(negociador);
+
+            // 8. Imigrante Italiano - (650, 500)
+            const infoImigrante = GameState.INFO_DATA.sao_paulo[7]; // leiaurea_fuga (FALSA)
+            const imigrante = new NPC(650, 500, {
+                name: 'Imigrante Italiano',
+                color: '#43A047',
+                accentColor: '#1B5E20',
+                width: 16, height: 24,
+                dialogueLines: [
+                    { speaker: 'Imigrante', text: 'Mamma mia! As plantações paulistas ficaram desertas antes do dia 13!' },
+                    { speaker: 'Alex', text: 'Para onde as pessoas fugiram?' },
+                    { speaker: 'Imigrante', text: infoImigrante.text },
+                    { speaker: 'Alex', text: 'Caminhar a pé de São Paulo até o Uruguai? Isso é geograficamente impossível!' }
+                ],
+                afterDialogueLines: [
+                    { speaker: 'Imigrante', text: 'Eu vi a multidão marchando rumo ao sul! Disseram que era muito longe...' }
+                ],
+                infoData: infoImigrante,
+                onInteractComplete: () => {
+                    if (gameState.addInfo(infoImigrante)) {
+                        infoPanel.notifyNewInfo(infoImigrante.title);
+                    }
+                }
+            });
+            interactables.push(imigrante);
+
+            // Nota: Portal para o Templo é agora criado dinamicamente no update() quando todas as infos forem coletadas
+        }
+    },
+
+    // ─────────────────────────────────────────────
+    // VITÓRIA (Créditos / Tela Final)
+    // ─────────────────────────────────────────────
+    vitoria: {
+        file: 'templo.tmj', // Reutiliza o templo como fundo decorativo
+        setup(map) {
+            alex.x = map.spawnPoint.x + 34;
+            alex.y = map.spawnPoint.y - 120;
+            interactables = [];
+            infoPanel.active = false;
+            tutorial.active = false;
+
+            // Mostrar mensagem final de vitória bloqueando a tela via diálogo
+            setTimeout(() => {
+                dialogueBox.show([
+                    { speaker: 'História', text: '🏆 PARABÉNS! VOCÊ COMPLETOU A AVENTURA COM SUCESSO!' },
+                    { speaker: 'História', text: 'Graças aos seus esforços intelectuais, as fakenews do passado foram corrigidas.' },
+                    { speaker: 'História', text: 'A Inconfidência Mineira, a Proclamação da República e a Lei Áurea estão seguras nos livros escolares.' },
+                    { speaker: 'Alex', text: 'Ufa! A verdade sempre vence no final.' },
+                    { speaker: 'Clio', text: 'Obrigada por jogar Ecos do Brasil!' },
+                    { speaker: 'Desenvolvedor', text: 'Créditos: Jogo desenvolvido em JavaScript puro utilizando Tiled e Canvas 2D.' }
+                ]);
+            }, 500);
         }
     },
 };
@@ -622,7 +1186,7 @@ async function loadScene(sceneName) {
             camera.x = Math.max(0, Math.min(camera.x, gameMap.widthPx  - camera.width));
             camera.y = Math.max(0, Math.min(camera.y, gameMap.heightPx - camera.height));
 
-            console.log(`🗺️ Cena "${sceneName}" — spawn (${alex.x|0}, ${alex.y|0}), infos: ${gameState.getInfoCount()}/4`);
+            console.log(`🗺️ Cena "${sceneName}" — spawn (${alex.x|0}, ${alex.y|0}), infos: ${gameState.getInfoCount()}/${gameState.getRequiredInfoCount()}`);
         } catch (err) {
             console.error(`❌ Erro ao carregar "${sceneName}":`, err);
         }
@@ -694,6 +1258,36 @@ function update(dt) {
         return;
     }
 
+    // Se houver opções de escolha no diálogo ativas, interceptamos o teclado
+    if (dialogueBox.active && dialogueBox.options && dialogueBox.options.length > 0) {
+        const up = input.isDown('ArrowUp') || input.isDown('KeyW');
+        const down = input.isDown('ArrowDown') || input.isDown('KeyS');
+        
+        if (up && !upWasDown) {
+            dialogueBox.navigateOptions(-1);
+        } else if (down && !downWasDown) {
+            dialogueBox.navigateOptions(1);
+        }
+        
+        upWasDown = up;
+        downWasDown = down;
+
+        const confirm = input.isDown('Space') || input.isDown('KeyE') || input.isDown('Enter');
+        if (confirm && !spaceWasDown) {
+            dialogueBox.selectCurrentOption();
+        }
+        spaceWasDown = confirm;
+        
+        dialogueBox.update(dt);
+        tutorial.update(dt);
+        infoPanel.update(dt);
+        return;
+    }
+
+    // Reseta trackers do menu se não estiver ativo
+    upWasDown = false;
+    downWasDown = false;
+
     if (!dialogueBox.active) {
         alex.update(dt, input, gameMap);
         camera.update(dt, alex);
@@ -711,6 +1305,8 @@ function update(dt) {
     for (const obj of interactables) {
         if (obj.update) obj.update(dt);
     }
+
+    checkSpawnTemploPortal();
 
     // Interação
     const space = input.isDown('Space') || input.isDown('KeyE');
@@ -791,6 +1387,44 @@ function draw() {
     if (tutorial)    tutorial.draw();
     if (infoPanel)   infoPanel.draw();
     sceneManager.draw();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// LOGICA DE PORTAIS DINAMICOS
+// ═══════════════════════════════════════════════════════════════
+function checkSpawnTemploPortal() {
+    if (!gameMap) return;
+    const phasesWithPortals = ['vila_rica', 'rio_de_janeiro', 'sao_paulo'];
+    if (!phasesWithPortals.includes(gameState.currentPhase)) return;
+    if (!gameState.hasAllInfos()) return;
+
+    // Verifica se o portal já existe
+    const hasPortal = interactables.some(item => item.name === 'Portal Templo');
+    if (hasPortal) return;
+
+    console.log('✨ Todos os fatos coletados! Abrindo portal para o Templo.');
+    if (gameState.currentPhase === 'vila_rica') {
+        interactables.push(new Interactable(gameMap.spawnPoint.x, gameMap.spawnPoint.y - 5, {
+            name: 'Portal Templo',
+            width: 24, height: 14,
+            visible: true, glow: true, isItem: true,
+            glowColor: 'rgba(180, 130, 255, 0.6)',
+            dialogueLines: [{ speaker: 'Alex', text: '[Voltar ao Templo com as informações]' }],
+            onInteractComplete: () => loadScene('templo')
+        }));
+    } else {
+        const portalObj = gameMap.mapObjects.find(o => o.name === 'volta_templo');
+        const px = portalObj ? portalObj.x : gameMap.spawnPoint.x;
+        const py = portalObj ? portalObj.y : gameMap.spawnPoint.y + 40;
+        interactables.push(new Interactable(px, py, {
+            name: 'Portal Templo',
+            width: portalObj ? portalObj.width : 40, height: portalObj ? portalObj.height : 10,
+            visible: true, glow: true, isItem: true,
+            glowColor: 'rgba(180, 130, 255, 0.6)',
+            dialogueLines: [{ speaker: 'Alex', text: '[Voltar ao Templo com as informações]' }],
+            onInteractComplete: () => loadScene('templo')
+        }));
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════

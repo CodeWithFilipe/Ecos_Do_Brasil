@@ -57,15 +57,34 @@ export class PuzzleUI {
     _getCardRects() {
         const infos = this.gameState.collectedInfos;
         const rects = [];
-        const cardW = 140;
-        const cardH = 65;
-        const gapX  = 10;
-        const gapY  = 10;
-        const cols  = 2;
-        
+        let cardW, cardH, gapX, gapY, cols, startY;
+
+        if (infos.length <= 4) {
+            cardW  = 140;
+            cardH  = 65;
+            gapX   = 10;
+            gapY   = 10;
+            cols   = 2;
+            startY = 80;
+        } else if (infos.length <= 6) {
+            cardW  = 92;
+            cardH  = 58;
+            gapX   = 8;
+            gapY   = 8;
+            cols   = 3;
+            startY = 70;
+        } else {
+            // Layout ultra compacto para 8 cards (4x2)
+            cardW  = 70;
+            cardH  = 58;
+            gapX   = 6;
+            gapY   = 6;
+            cols   = 4;
+            startY = 70;
+        }
+
         const totalW = cols * cardW + (cols - 1) * gapX;
         const startX = (this.canvas.width - totalW) / 2;
-        const startY = 80;
 
         for (let i = 0; i < infos.length; i++) {
             const col = i % cols;
@@ -174,7 +193,7 @@ export class PuzzleUI {
         ctx.fillStyle = '#F5F0E8';
         ctx.font = '10px monospace';
         const lines = [
-            'Você coletou as informações sobre a Inconfidência Mineira.',
+            'Você coletou as informações históricas.',
             '',
             'Agora, Clio precisa que você identifique:',
             '',
@@ -200,6 +219,8 @@ export class PuzzleUI {
         ctx.fillStyle = '#EF9F27';
         ctx.font = 'bold 12px monospace';
         ctx.textAlign = 'center';
+
+        const numCards = this.gameState.collectedInfos.length;
 
         if (isStart) {
             ctx.fillText('Selecione a informação que DEU INÍCIO ao movimento:', W / 2, 40);
@@ -237,28 +258,35 @@ export class PuzzleUI {
 
             // NPC
             ctx.fillStyle = '#EF9F27';
-            ctx.font = 'bold 8px monospace';
+            ctx.font = numCards > 6
+                ? 'bold 6px monospace'
+                : (numCards > 4 ? 'bold 7px monospace' : 'bold 8px monospace');
             ctx.textAlign = 'center';
-            ctx.fillText(info.npc.toUpperCase(), c.x + c.w / 2, c.y + 12);
+            ctx.fillText(info.npc.toUpperCase(), c.x + c.w / 2, c.y + (numCards > 6 ? 9 : (numCards > 4 ? 10 : 12)));
 
             // Título
             ctx.fillStyle = '#F5F0E8';
-            ctx.font = 'bold 9px monospace';
+            ctx.font = numCards > 6
+                ? 'bold 7px monospace'
+                : (numCards > 4 ? 'bold 8px monospace' : 'bold 9px monospace');
             ctx.textAlign = 'center';
-            const nextY = this._wrapText(ctx, info.title, c.x + c.w / 2, c.y + 24, c.w - 8, 10);
+            const titleY = numCards > 6 ? c.y + 18 : (numCards > 4 ? c.y + 20 : c.y + 24);
+            const nextY = this._wrapText(ctx, info.title, c.x + c.w / 2, titleY, c.w - 6, numCards > 6 ? 7 : (numCards > 4 ? 8 : 10));
 
             // Texto resumido (com wrap)
             ctx.fillStyle = 'rgba(220, 210, 200, 0.8)';
-            ctx.font = '7px monospace';
+            ctx.font = numCards > 6
+                ? '5.5px monospace'
+                : (numCards > 4 ? '6.5px monospace' : '7px monospace');
             ctx.textAlign = 'center';
-            this._wrapText(ctx, info.shortText, c.x + c.w / 2, nextY + 4, c.w - 8, 9);
+            this._wrapText(ctx, info.shortText, c.x + c.w / 2, nextY + (numCards > 6 ? 1 : (numCards > 4 ? 2 : 4)), c.w - 6, numCards > 6 ? 6.5 : (numCards > 4 ? 7.5 : 9));
 
             // Marcador de selecionado
             if (isSelected) {
                 ctx.fillStyle = '#4CAF50';
-                ctx.font = 'bold 12px monospace';
+                ctx.font = numCards > 6 ? 'bold 10px monospace' : 'bold 12px monospace';
                 ctx.textAlign = 'center';
-                ctx.fillText('✅', c.x + c.w - 14, c.y + 14);
+                ctx.fillText('✅', c.x + c.w - 10, c.y + 10);
             }
         }
         ctx.textAlign = 'left';
@@ -281,15 +309,23 @@ export class PuzzleUI {
         ctx.font = '10px monospace';
 
         if (isCorrect) {
+            const isRio = this.selectedStart.id.startsWith('republica');
+            const isLei = this.selectedStart.id.startsWith('leiaurea');
             const lines = [
                 'Você identificou corretamente:',
                 '',
                 `✅ INÍCIO: ${this.selectedStart.title}`,
                 `✅ FIM: ${this.selectedEnd.title}`,
                 '',
-                'A Inconfidência Mineira começou pela revolta',
-                'contra a Derrama e terminou com a traição',
-                'de Joaquim Silvério dos Reis.',
+                isLei
+                  ? 'A luta abolicionista e a resistência conquistaram a libertação,'
+                  : (isRio ? 'A República começou pela insatisfação dos militares,' : 'A Inconfidência Mineira começou pela revolta'),
+                isLei
+                  ? 'mas a falta de suporte social pós-Lei Áurea'
+                  : (isRio ? 'Igreja e cafeicultores, e terminou com o exílio' : 'contra a Derrama e terminou com a traição'),
+                isLei
+                  ? 'manteve a população negra liberta marginalizada.'
+                  : (isRio ? 'da Família Real proclamada por Deodoro.' : 'de Joaquim Silvério dos Reis.'),
                 '',
                 'A névoa de mentiras foi dissipada!',
                 'O passado está seguro... por enquanto.',
@@ -304,7 +340,7 @@ export class PuzzleUI {
                 `❌ Início: ${this.selectedStart?.title || '—'}`,
                 `❌ Fim: ${this.selectedEnd?.title || '—'}`,
                 '',
-                'Volte à Vila Rica e investigue melhor!',
+                'Volte e investigue melhor!',
                 'Cuidado com as fake news do passado...',
             ];
             lines.forEach((line, i) => {

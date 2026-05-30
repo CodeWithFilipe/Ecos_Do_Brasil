@@ -12,13 +12,47 @@ export class DialogueBox {
         this.timer = 0;
         this.speed = 30; // Milissegundos por letra (efeito máquina de escrever)
         this.onComplete = null;
+
+        // Opções de escolha do diálogo
+        this.options = null;
+        this.selectedOption = 0;
+        this.onOptionSelect = null;
     }
 
     show(lines, callback) {
         this.queue = lines;
         this.active = true;
         this.onComplete = callback;
+        this.options = null; // Limpar opções se for um diálogo comum
         this.nextLine();
+    }
+
+    showChoices(speaker, text, options, callback) {
+        this.active = true;
+        this.speaker = speaker;
+        this.currentLine = text;
+        this.currentChar = text.length; // Exibe o texto imediatamente
+        this.options = options;
+        this.selectedOption = 0;
+        this.onOptionSelect = callback;
+        this.queue = [];
+    }
+
+    navigateOptions(dir) {
+        if (!this.options || this.options.length === 0) return;
+        this.selectedOption = (this.selectedOption + dir + this.options.length) % this.options.length;
+    }
+
+    selectCurrentOption() {
+        if (!this.options || this.options.length === 0) return;
+        const selected = this.selectedOption;
+        const cb = this.onOptionSelect;
+        
+        // Reseta estado antes de executar o callback para evitar conflitos de input
+        this.options = null;
+        this.active = false;
+        
+        if (cb) cb(selected);
     }
 
     nextLine() {
@@ -88,6 +122,30 @@ export class DialogueBox {
         
         // Função auxiliar para quebrar as linhas de texto para não vazar da caixa
         this.wrapText(ctx, textToShow, x + 8, y + 32, w - 16, 12);
+
+        // Se tiver opções, desenhar a lista acima da caixa de texto
+        if (this.options && this.options.length > 0) {
+            const optH = this.options.length * 15 + 10;
+            const optY = y - optH - 5;
+            
+            // Fundo da caixa de opções
+            ctx.fillStyle = 'rgba(10, 10, 25, 0.95)';
+            ctx.fillRect(x, optY, w, optH);
+            ctx.strokeStyle = '#EF9F27';
+            ctx.lineWidth = 1.5;
+            ctx.strokeRect(x, optY, w, optH);
+            
+            // Desenhar cada opção
+            this.options.forEach((opt, idx) => {
+                const isSelected = idx === this.selectedOption;
+                ctx.fillStyle = isSelected ? '#EF9F27' : '#FFFFFF';
+                ctx.font = isSelected ? 'bold 9px monospace' : '9px monospace';
+                const prefix = isSelected ? '> ' : '  ';
+                
+                // Desenhar texto da opção
+                ctx.fillText(prefix + opt, x + 10, optY + 14 + idx * 15);
+            });
+        }
     }
 
     wrapText(ctx, text, x, y, maxWidth, lineHeight) {

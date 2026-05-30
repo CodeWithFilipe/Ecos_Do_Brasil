@@ -40,7 +40,7 @@ export class InfoPanel {
 
         const ctx = this.ctx;
         const count = this.gameState.getInfoCount();
-        const total = 4;
+        const total = this.gameState.getRequiredInfoCount();
         const allDone = this.gameState.hasAllInfos();
 
         // ── Badge no canto superior-direito ──
