@@ -764,9 +764,9 @@ const SCENES = {
             infoPanel.active = true;
             tutorial.active = false;
 
-            // 1. Quintino Bocaiúva (Jornalista)
+            // 1. Quintino Bocaiúva (Jornalista) - Posicionado à esquerda superior
             const infoQuintino = GameState.INFO_DATA.rio_de_janeiro[0]; // republica_inicio (VERDADEIRA)
-            const quintino = new NPC(460, 150, {
+            const quintino = new NPC(100, 140, {
                 name: 'Quintino Bocaiúva',
                 color: '#1E88E5',
                 accentColor: '#0D47A1',
@@ -790,9 +790,9 @@ const SCENES = {
             });
             interactables.push(quintino);
 
-            // 2. Aristocrata Fofoqueiro
+            // 2. Aristocrata Fofoqueiro - Posicionado à direita do casarão central
             const infoAristocrata = GameState.INFO_DATA.rio_de_janeiro[1]; // republica_rival (FALSA)
-            const aristocrata = new NPC(460, 250, {
+            const aristocrata = new NPC(360, 280, {
                 name: 'Aristocrata',
                 color: '#F57C00',
                 accentColor: '#E65100',
@@ -815,9 +815,9 @@ const SCENES = {
             });
             interactables.push(aristocrata);
 
-            // 3. Vendedor Ambulante
+            // 3. Vendedor Ambulante - Posicionado no centro
             const infoVendedor = GameState.INFO_DATA.rio_de_janeiro[3]; // republica_eleicao (FALSA)
-            const vendedor = new NPC(460, 350, {
+            const vendedor = new NPC(180, 360, {
                 name: 'Ambulante',
                 color: '#795548',
                 accentColor: '#3E2723',
@@ -840,9 +840,9 @@ const SCENES = {
             });
             interactables.push(vendedor);
 
-            // 4. Guarda Imperial
+            // 4. Guarda Imperial - Posicionado na esquerda inferior
             const infoGuarda = GameState.INFO_DATA.rio_de_janeiro[4]; // republica_disfarce (FALSA)
-            const guarda = new NPC(460, 430, {
+            const guarda = new NPC(60, 440, {
                 name: 'Guarda do Paço',
                 color: '#3F51B5',
                 accentColor: '#1A237E',
@@ -865,9 +865,9 @@ const SCENES = {
             });
             interactables.push(guarda);
 
-            // 5. Baronesa do Café
+            // 5. Baronesa do Café - Posicionada na direita inferior
             const infoBaronesa = GameState.INFO_DATA.rio_de_janeiro[5]; // republica_carta (FALSA)
-            const baronesa = new NPC(460, 490, {
+            const baronesa = new NPC(300, 480, {
                 name: 'Baronesa',
                 color: '#9C27B0',
                 accentColor: '#4A148C',
@@ -890,9 +890,9 @@ const SCENES = {
             });
             interactables.push(baronesa);
 
-            // 6. Marechal Deodoro da Fonseca (posicionado diretamente no Paço Imperial)
+            // 6. Marechal Deodoro da Fonseca - Posicionado na parte superior central
             const infoDeodoro = GameState.INFO_DATA.rio_de_janeiro[2]; // republica_fim (VERDADEIRA)
-            const deodoro = new NPC(460, 100, {
+            const deodoro = new NPC(240, 120, {
                 name: 'Marechal Deodoro',
                 color: '#2E7D32',
                 accentColor: '#1B5E20',
@@ -1289,7 +1289,7 @@ function update(dt) {
     downWasDown = false;
 
     if (!dialogueBox.active) {
-        alex.update(dt, input, gameMap);
+        alex.update(dt, input, gameMap, interactables);
         camera.update(dt, alex);
 
         // Tutorial: detectar movimento

@@ -1,3 +1,5 @@
+import { NPC } from './NPC.js';
+
 /**
  * Player — Alex
  *
@@ -66,7 +68,7 @@ export class Player {
         this._recalcOffsets();
     }
 
-    update(dt, input, gameMap = null) {
+    update(dt, input, gameMap = null, interactables = []) {
         let dx = 0, dy = 0;
 
         if (input.isDown('ArrowUp')    || input.isDown('KeyW')) { dy = -1; this.facing = 1; }
@@ -85,13 +87,17 @@ export class Player {
             const my = dy * this.speed * dt;
 
             if (gameMap) {
-                // Colisão separada por eixo: tenta X, depois Y
+                // Colisão separada por eixo: tenta X, depois Y e NPCs
                 const nx = this.x + mx;
-                if (!gameMap.isColliding(nx, this.y, this.width, this.height)) {
+                const collidesX = gameMap.isColliding(nx, this.y, this.width, this.height) || 
+                                  this.isCollidingWithNPCs(nx, this.y, interactables);
+                if (!collidesX) {
                     this.x = nx;
                 }
                 const ny = this.y + my;
-                if (!gameMap.isColliding(this.x, ny, this.width, this.height)) {
+                const collidesY = gameMap.isColliding(this.x, ny, this.width, this.height) || 
+                                  this.isCollidingWithNPCs(this.x, ny, interactables);
+                if (!collidesY) {
                     this.y = ny;
                 }
             } else {
@@ -110,6 +116,22 @@ export class Player {
             this.animFrame = 0;
             this.animTimer = 0;
         }
+    }
+
+    /**
+     * Verifica colisão física com os NPCs da cena.
+     */
+    isCollidingWithNPCs(x, y, interactables) {
+        for (const obj of interactables) {
+            if (obj instanceof NPC || obj.constructor.name === 'NPC' || obj.constructor.name === 'Clio') {
+                const npcBox = obj.getHitbox ? obj.getHitbox() : { x: obj.x, y: obj.y + obj.height - 10, width: obj.width, height: 10 };
+                if (x < npcBox.x + npcBox.width && x + this.width > npcBox.x &&
+                    y < npcBox.y + npcBox.height && y + this.height > npcBox.y) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     /**
