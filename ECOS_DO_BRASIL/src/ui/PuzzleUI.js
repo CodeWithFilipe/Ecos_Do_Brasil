@@ -57,17 +57,22 @@ export class PuzzleUI {
     _getCardRects() {
         const infos = this.gameState.collectedInfos;
         const rects = [];
-        const cardW = 170;
-        const cardH = 80;
-        const gap   = 12;
-        const totalW = infos.length * cardW + (infos.length - 1) * gap;
+        const cardW = 140;
+        const cardH = 65;
+        const gapX  = 10;
+        const gapY  = 10;
+        const cols  = 2;
+        
+        const totalW = cols * cardW + (cols - 1) * gapX;
         const startX = (this.canvas.width - totalW) / 2;
-        const y = 100;
+        const startY = 80;
 
         for (let i = 0; i < infos.length; i++) {
+            const col = i % cols;
+            const row = Math.floor(i / cols);
             rects.push({
-                x: startX + i * (cardW + gap),
-                y: y,
+                x: startX + col * (cardW + gapX),
+                y: startY + row * (cardH + gapY),
                 w: cardW,
                 h: cardH,
                 info: infos[i]
@@ -79,8 +84,10 @@ export class PuzzleUI {
     _handleMouseMove(e) {
         if (!this.active || this.phase === 'intro' || this.phase === 'result') return;
         const rect = this.canvas.getBoundingClientRect();
-        const mx = e.clientX - rect.left;
-        const my = e.clientY - rect.top;
+        const scaleX = this.canvas.width / rect.width;
+        const scaleY = this.canvas.height / rect.height;
+        const mx = (e.clientX - rect.left) * scaleX;
+        const my = (e.clientY - rect.top) * scaleY;
 
         const cards = this._getCardRects();
         this.hoveredCard = -1;
@@ -231,18 +238,20 @@ export class PuzzleUI {
             // NPC
             ctx.fillStyle = '#EF9F27';
             ctx.font = 'bold 8px monospace';
-            ctx.textAlign = 'left';
-            ctx.fillText(info.npc.toUpperCase(), c.x + 6, c.y + 14);
+            ctx.textAlign = 'center';
+            ctx.fillText(info.npc.toUpperCase(), c.x + c.w / 2, c.y + 12);
 
             // Título
             ctx.fillStyle = '#F5F0E8';
             ctx.font = 'bold 9px monospace';
-            ctx.fillText(info.title, c.x + 6, c.y + 28);
+            ctx.textAlign = 'center';
+            const nextY = this._wrapText(ctx, info.title, c.x + c.w / 2, c.y + 24, c.w - 8, 10);
 
             // Texto resumido (com wrap)
             ctx.fillStyle = 'rgba(220, 210, 200, 0.8)';
             ctx.font = '7px monospace';
-            this._wrapText(ctx, info.shortText, c.x + 6, c.y + 42, c.w - 12, 10);
+            ctx.textAlign = 'center';
+            this._wrapText(ctx, info.shortText, c.x + c.w / 2, nextY + 4, c.w - 8, 9);
 
             // Marcador de selecionado
             if (isSelected) {
@@ -326,5 +335,6 @@ export class PuzzleUI {
             }
         }
         ctx.fillText(line.trim(), x, y);
+        return y + lineH;
     }
 }

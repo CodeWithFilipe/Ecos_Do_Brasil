@@ -38,6 +38,8 @@ export class Map {
                 tileH    : ts.tileheight || this.tileHeight,
                 columns  : ts.columns    || 0,
                 tilecount: ts.tilecount  || 0,
+                margin   : ts.margin     || 0,
+                spacing  : ts.spacing    || 0,
             };
 
             if (ts.image) {
@@ -183,19 +185,19 @@ export class Map {
                 const raw = layer.data[i];
                 if (!raw) continue;
 
-                const gid   = (raw & ~(FLIP_H | FLIP_V | FLIP_D)) >>> 0;
                 const flipH = (raw & FLIP_H) !== 0;
                 const flipV = (raw & FLIP_V) !== 0;
+                const gid   = (raw & 0x0FFFFFFF); // Limpa as flags de rotação
 
                 const ts = this._tilesetFor(gid);
                 if (!ts || !ts.image || !ts.image.complete || !ts.image.naturalWidth) continue;
 
                 const localId = gid - ts.firstgid;
-                const cols    = ts.columns || Math.floor(ts.image.width / ts.tileW);
+                const cols    = ts.columns || Math.floor((ts.image.width - ts.margin * 2 + ts.spacing) / (ts.tileW + ts.spacing));
                 if (cols <= 0) continue;
 
-                const sx = (localId % cols) * ts.tileW;
-                const sy = Math.floor(localId / cols) * ts.tileH;
+                const sx = ts.margin + (localId % cols) * (ts.tileW + ts.spacing);
+                const sy = ts.margin + Math.floor(localId / cols) * (ts.tileH + ts.spacing);
 
                 const dx = (i % layer.width)           * this.tileWidth;
                 const dy = Math.floor(i / layer.width) * this.tileHeight;
