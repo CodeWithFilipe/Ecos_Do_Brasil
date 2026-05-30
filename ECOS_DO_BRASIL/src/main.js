@@ -33,6 +33,7 @@ let interactables = [];
 let lastTime      = performance.now();
 let spaceWasDown  = false;
 let gameReady     = false;
+let nextSpawnDoor = null;   // Nome da porta para respawn inteligente (ex: 'porta_poeta')
 
 // Debug
 let debugMode = false;
@@ -66,7 +67,6 @@ const IMAGE_SOURCES = {
 
     // Player
     'player'         : './assets/player/Player.png',
-    'player_actions' : './assets/player/Player_Actions.png',
 
     // Sprites extras (Cute Fantasy Free)
     'chest'    : './assets/sprites/Chest.png',
@@ -201,8 +201,12 @@ const SCENES = {
     templo: {
         file: 'templo.tmj',
         setup(map) {
-            alex.x = map.spawnPoint.x;
-            alex.y = map.spawnPoint.y;
+            // Spawn centralizado no corredor entre as duas colisões (colisao4 e colisao5)
+            // O spawn_player do TMJ está em (446,578), mas fica encostado na borda de colisao4.
+            // Empurramos para o centro do corredor seguro (x ~480, y ~460).
+            alex.x = map.spawnPoint.x + 34;
+            alex.y = map.spawnPoint.y - 120;
+            alex.resolveCollision(gameMap);
             interactables = [];
             gameState.currentPhase = 'templo';
             tutorial.active = false;
@@ -296,8 +300,21 @@ const SCENES = {
     vila_rica: {
         file: 'praca.tmj',
         setup(map) {
-            alex.x = map.spawnPoint.x + 10;
-            alex.y = map.spawnPoint.y;
+            // Respawn inteligente: se veio de um prédio, nasce na porta correspondente
+            if (nextSpawnDoor) {
+                const door = map.mapObjects.find(o => o.name === nextSpawnDoor);
+                if (door) {
+                    alex.x = door.x + door.width / 2 - alex.width / 2;
+                    alex.y = door.y + door.height + 4;
+                } else {
+                    alex.x = map.spawnPoint.x + 10;
+                    alex.y = map.spawnPoint.y;
+                }
+                nextSpawnDoor = null;
+            } else {
+                alex.x = map.spawnPoint.x + 10;
+                alex.y = map.spawnPoint.y;
+            }
             interactables = [];
             gameState.currentPhase = 'vila_rica';
             tutorial.active = false;
@@ -315,7 +332,9 @@ const SCENES = {
                     dialogueLines: [
                         { speaker: 'Vendedor', text: 'Pssst! Ei, garoto! Quer ouvir uma história?' },
                         { speaker: 'Alex', text: 'Claro! O que você sabe sobre a Inconfidência?' },
-                        { speaker: 'Vendedor', text: info.text },
+                        { speaker: 'Vendedor', text: 'Como punição final pela rebelião, a Rainha de Portugal confiscou todas as receitas da região.' },
+                        { speaker: 'Vendedor', text: 'E proibiu os mineiros de produzirem pão de queijo e doce de leite por cem anos!' },
+                        { speaker: 'Vendedor', text: 'Obrigou a população a comer apenas jiló cozido!' },
                         { speaker: 'Alex', text: 'Hmm, isso parece um pouco estranho...' },
                     ],
                     afterDialogueLines: [
@@ -425,7 +444,10 @@ const SCENES = {
                     name: 'Saída',
                     width: saida.width, height: saida.height,
                     dialogueLines: [{ speaker: 'Alex', text: '[Voltar para a Vila Rica]' }],
-                    onInteractComplete: () => loadScene('vila_rica')
+                    onInteractComplete: () => {
+                        nextSpawnDoor = 'porta_poeta';
+                        loadScene('vila_rica');
+                    }
                 }));
             }
         }
@@ -456,7 +478,9 @@ const SCENES = {
                     { speaker: '???', text: '*sussurrando* Venha cá, garoto. Tenho algo para contar.' },
                     { speaker: 'Alex', text: 'Quem é você?' },
                     { speaker: 'Espião', text: 'Digamos que eu sei de coisas que outros gostariam de esconder...' },
-                    { speaker: 'Espião', text: info.text },
+                    { speaker: 'Espião', text: 'Os planos de liberdade foram interrompidos antes mesmo da revolta começar.' },
+                    { speaker: 'Espião', text: 'Um dos participantes, Joaquim Silvério dos Reis, resolveu trair seus companheiros.' },
+                    { speaker: 'Espião', text: 'Ele revelou todo o segredo ao governador de Minas Gerais em troca do perdão de suas dívidas.' },
                     { speaker: 'Alex', text: 'Um traidor?! Silvério dos Reis entregou todo mundo!' },
                     { speaker: 'Espião', text: 'Silêncio! As paredes têm ouvidos...' },
                 ],
@@ -479,7 +503,10 @@ const SCENES = {
                     name: 'Saída',
                     width: saida.width, height: saida.height,
                     dialogueLines: [{ speaker: 'Alex', text: '[Voltar para a Vila Rica]' }],
-                    onInteractComplete: () => loadScene('vila_rica')
+                    onInteractComplete: () => {
+                        nextSpawnDoor = 'porta_igreja';
+                        loadScene('vila_rica');
+                    }
                 }));
             }
         }
@@ -510,7 +537,9 @@ const SCENES = {
                     { speaker: 'Contador', text: '*goles na caneca* Ah, um viajante! Sente-se, sente-se!' },
                     { speaker: 'Alex', text: 'Boa noite! O que sabe sobre Tiradentes?' },
                     { speaker: 'Contador', text: 'Tiradentes? Ah, eu sei TUDO sobre ele! Escute só...' },
-                    { speaker: 'Contador', text: info.text },
+                    { speaker: 'Contador', text: 'Joaquim José da Silva Xavier tinha o apelido de Tiradentes porque, nas reuniões secretas...' },
+                    { speaker: 'Contador', text: '...ele usava seus conhecimentos de dentista para criar dentaduras mágicas de ouro e diamantes!' },
+                    { speaker: 'Contador', text: 'Essas dentaduras ajudavam os rebeldes a morder os soldados inimigos!' },
                     { speaker: 'Alex', text: 'Dentaduras mágicas?! Isso não parece muito real...' },
                     { speaker: 'Contador', text: 'Claro que é real! Meu bisavô viu com os próprios olhos! *soluço*' },
                 ],
@@ -533,7 +562,10 @@ const SCENES = {
                     name: 'Saída',
                     width: saida.width, height: saida.height,
                     dialogueLines: [{ speaker: 'Alex', text: '[Voltar para a Vila Rica]' }],
-                    onInteractComplete: () => loadScene('vila_rica')
+                    onInteractComplete: () => {
+                        nextSpawnDoor = 'porta_taverna';
+                        loadScene('vila_rica');
+                    }
                 }));
             }
         }
@@ -583,6 +615,7 @@ async function loadScene(sceneName) {
             camera.setBounds(gameMap.widthPx, gameMap.heightPx);
 
             scene.setup(gameMap);
+            alex.resolveCollision(gameMap);
 
             camera.x = alex.x + alex.width / 2  - camera.width / 2;
             camera.y = alex.y + alex.height / 2 - camera.height / 2;
@@ -612,7 +645,7 @@ async function init() {
         maxFrames   : 6,
         hitboxW     : 10,
         hitboxH     : 10,
-        speed       : 90,
+        speed       : 100,
         animSpeed   : 0.12,
     });
 
@@ -628,6 +661,7 @@ async function init() {
         gameMap = buildMap(mapData);
         camera.setBounds(gameMap.widthPx, gameMap.heightPx);
         SCENES.biblioteca.setup(gameMap);
+        alex.resolveCollision(gameMap);
         camera.x = alex.x + alex.width / 2  - camera.width / 2;
         camera.y = alex.y + alex.height / 2 - camera.height / 2;
     } catch (err) {
