@@ -229,6 +229,11 @@ function rectsOverlap(a, b) {
  *  - Camada "Colisões"/"colisoes" com retângulos, polígonos e polylines
  *  - Busca spawn_player em TODAS as objectgroup layers
  *  - Objetos nomeados (portais, itens, NPCs)
+ *  - Tiles marcados com a propriedade custom "solid" (no Tiled: aba
+ *    "Tile Properties" do tileset) geram colisão automaticamente na
+ *    posição exata onde aparecem — sem precisar de um retângulo manual
+ *    duplicado na camada de colisões. Isso evita hitboxes desalinhadas
+ *    do sprite real sempre que um objeto decorativo é movido/editado.
  *
  * A lógica de colisão (nomes de camada aceitos, teste de sobreposição) vive
  * em Collision.js — fonte única de verdade compartilhada com as entidades.
@@ -248,6 +253,7 @@ class Map {
         this.mapObjects        = [];
 
         this._buildTilesets(imageRegistry);
+        this._buildTileCollisions();
         this._parseAllObjectLayers();
     }
 
@@ -264,6 +270,7 @@ class Map {
                 tilecount: ts.tilecount  || 0,
                 margin   : ts.margin     || 0,
                 spacing  : ts.spacing    || 0,
+                solidLocalIds: this._readSolidLocalIds(ts),
             };
 
             if (ts.image) {
@@ -298,6 +305,43 @@ class Map {
             if (gid >= ts.firstgid) return ts;
         }
         return null;
+    }
+
+    /** IDs locais (dentro do tileset) marcados com a propriedade custom "solid":true no Tiled. */
+    _readSolidLocalIds(ts) {
+        const ids = new Set();
+        for (const tileDef of ts.tiles || []) {
+            const solidProp = (tileDef.properties || []).find(p => p.name === 'solid');
+            if (solidProp && solidProp.value) ids.add(tileDef.id);
+        }
+        return ids;
+    }
+
+    /**
+     * Gera colisão automaticamente para todo tile marcado como "solid",
+     * exatamente na célula onde ele é desenhado (mesma conta de dx/dy do
+     * draw()). Assim a hitbox nunca fica dessincronizada do sprite real:
+     * mover o tile no editor move a colisão junto, sem retângulo manual.
+     */
+    _buildTileCollisions() {
+        for (const layer of this.mapData.layers) {
+            if (layer.type !== 'tilelayer') continue;
+
+            for (let i = 0; i < layer.data.length; i++) {
+                const gid = layer.data[i] & 0x0FFFFFFF;
+                if (!gid) continue;
+
+                const ts = this._tilesetFor(gid);
+                if (!ts || !ts.solidLocalIds.has(gid - ts.firstgid)) continue;
+
+                this.collisionRects.push({
+                    x: (i % layer.width)           * this.tileWidth,
+                    y: Math.floor(i / layer.width) * this.tileHeight,
+                    width : this.tileWidth,
+                    height: this.tileHeight,
+                });
+            }
+        }
     }
 
     // ── PARSE ALL OBJECT LAYERS ──────────────────
@@ -1535,6 +1579,17 @@ class NPC {
         };
     }
 
+    /**
+     * Caixa usada para detectar interação (checkInteraction) e para o overlay
+     * de debug (F3). Por padrão é a própria x/y/width/height do NPC — correto
+     * para o desenho pixelart genérico, que preenche essa caixa. Subclasses com
+     * desenho próprio cujo visual real não coincide com essa caixa (ex.: Clio)
+     * devem sobrescrever este método para refletir as dimensões reais desenhadas.
+     */
+    getDetectionBox() {
+        return { x: this.x, y: this.y, width: this.width, height: this.height };
+    }
+
     _drawNameTag(ctx) {
         const cx = this.x + this.width / 2;
         const topY = this.y - this._visualTopOffset();
@@ -1786,25 +1841,33 @@ class Player {
 // ═══════ src/entities/Clio.js ═══════
 
 /**
- * Clio — a musa da História.
+ * Clio — a guardiã indígena da memória histórica do Brasil.
  *
- * Visual próprio em pixel art procedural (não depende de spritesheet):
- * deusa de pele morena com túnica branca-dourada, coroa de louros e
- * fita esvoaçante, flutuando com aura luminosa e partículas.
+ * Representada como uma mulher INDÍGENA brasileira, desenhada em pixel art
+ * procedural (não depende de spritesheet): pele morena, cabelo liso preto,
+ * cocar de penas (verde/amarelo/vermelho), pintura facial de urucum, colar de
+ * sementes e túnica de fibra natural com grafismo geométrico. A aura dourada
+ * e as partículas representam a "memória viva" que ela protege — não é um
+ * anjo nem uma figura mitológica europeia.
  */
 class Clio extends NPC {
 
     static PALETTE = Object.freeze({
-        skin      : '#8d5a3b',
-        skinShade : '#71462e',
-        hair      : '#1f1710',
-        hairShine : '#3d2e1e',
-        robe      : '#f6f1e2',
-        robeShade : '#d9cfb4',
-        sash      : '#2E7D32',      // faixa verde (Brasil)
-        trim      : '#e6b422',      // dourado
-        laurel    : '#c9a227',
-        eyes      : '#2b1d12',
+        skin        : '#8d5a3b',
+        skinShade   : '#71462e',
+        hair        : '#17110b',
+        garment     : '#b5744a',   // fibra natural / terracota
+        garmentShade: '#8f5836',
+        pattern     : '#c0392b',   // grafismo urucum (vermelho)
+        patternDark : '#3a2417',
+        headband    : '#5a3720',   // faixa do cocar
+        trim        : '#e6b422',   // adornos dourados
+        beads       : '#f4ead2',   // sementes claras do colar
+        featherG    : '#2E7D32',   // pena verde
+        featherY    : '#e6b422',   // pena amarela
+        featherR    : '#c0392b',   // pena vermelha
+        paint       : '#c0392b',   // pintura facial (urucum)
+        eyes        : '#241812',
     });
 
     constructor(x, y) {
@@ -1812,6 +1875,18 @@ class Clio extends NPC {
         this.glowTimer = 0;
         this.particles = Array.from({ length: 10 }, () => this._createParticle());
         this.hasBeenIntroduced = false;
+    }
+
+    /**
+     * A silhueta real desenhada em _drawGuardian (cocar de penas + túnica) não
+     * preenche o retângulo 18x30 inteiro: as penas do cocar sobem ~3px acima de
+     * this.y e a barra da túnica termina ~4px antes de this.y+height. Sem este
+     * ajuste, a caixa de interação/debug sobra vazio embaixo e corta o topo das
+     * penas. Valores calculados a partir das coordenadas fixas de _drawGuardian
+     * (ignorando a flutuação "bob", que é só ±2.5px).
+     */
+    getDetectionBox() {
+        return { x: this.x + 2, y: this.y - 4, width: 14, height: 30 };
     }
 
     _createParticle() {
@@ -1839,105 +1914,129 @@ class Clio extends NPC {
     draw(ctx) {
         const bob = Math.sin(this.glowTimer * 2) * 2.5;
         this._drawAura(ctx);
-        this._drawGoddess(ctx, bob);
+        this._drawGuardian(ctx, bob);
         this._drawParticles(ctx);
         this._drawNameTag(ctx);
     }
 
-    /** Pixel art da deusa (18x30, ancorada em this.x/this.y). */
-    _drawGoddess(ctx, bob) {
+    /** Pixel art da guardiã indígena (18x30, ancorada em this.x/this.y). */
+    _drawGuardian(ctx, bob) {
         const P  = Clio.PALETTE;
         const x  = this.x;
         const y  = this.y + bob;
         const cx = x + this.width / 2;
 
-        // Brilho sob os pés (flutuação)
+        // Brilho dourado sob os pés (memória/aura)
         ctx.fillStyle = 'rgba(230, 180, 60, 0.35)';
         ctx.beginPath();
         ctx.ellipse(cx, this.y + this.height + 2, 9, 2.5, 0, 0, Math.PI * 2);
         ctx.fill();
 
-        // Túnica (corpo) — silhueta em A, esvoaçante
-        ctx.fillStyle = P.robe;
+        // ── Túnica de fibra natural (silhueta em A) ──
+        ctx.fillStyle = P.garment;
         ctx.beginPath();
         ctx.moveTo(cx - 3.5, y + 10);
         ctx.lineTo(cx + 3.5, y + 10);
-        ctx.lineTo(cx + 7,  y + 26);
-        ctx.lineTo(cx - 7,  y + 26);
+        ctx.lineTo(cx + 7,   y + 26);
+        ctx.lineTo(cx - 7,   y + 26);
         ctx.closePath();
         ctx.fill();
-        // Sombra lateral da túnica
-        ctx.fillStyle = P.robeShade;
+        // sombra lateral
+        ctx.fillStyle = P.garmentShade;
         ctx.beginPath();
-        ctx.moveTo(cx + 1, y + 10);
+        ctx.moveTo(cx + 1,   y + 10);
         ctx.lineTo(cx + 3.5, y + 10);
-        ctx.lineTo(cx + 7, y + 26);
-        ctx.lineTo(cx + 2, y + 26);
+        ctx.lineTo(cx + 7,   y + 26);
+        ctx.lineTo(cx + 2,   y + 26);
         ctx.closePath();
         ctx.fill();
-        // Barra dourada da túnica
-        ctx.fillStyle = P.trim;
-        ctx.fillRect(cx - 7, y + 25, 14, 1.5);
 
-        // Faixa verde no peito
-        ctx.fillStyle = P.sash;
-        ctx.fillRect(cx - 3.5, y + 12, 7, 2);
+        // Grafismo geométrico indígena (urucum) na túnica
+        ctx.fillStyle = P.pattern;
+        ctx.fillRect(cx - 6, y + 17, 13, 2.2);
+        ctx.fillStyle = P.patternDark;
+        for (let i = -6; i <= 6; i += 2.6) ctx.fillRect(cx + i, y + 17, 1.2, 2.2);
+        // barra da bainha
+        ctx.fillStyle = P.pattern;
+        ctx.fillRect(cx - 7, y + 24.5, 14, 1.5);
 
-        // Braços (mangas)
-        ctx.fillStyle = P.robe;
+        // ── Braços e mãos ──
+        ctx.fillStyle = P.skin;
         ctx.fillRect(cx - 6.5, y + 11, 2.5, 8);
         ctx.fillRect(cx + 4,   y + 11, 2.5, 8);
-        // Mãos
+        ctx.fillStyle = P.skinShade;
+        ctx.fillRect(cx + 5,   y + 11, 1.5, 8);   // sombra no braço direito
         ctx.fillStyle = P.skin;
         ctx.fillRect(cx - 6.5, y + 19, 2.5, 2);
         ctx.fillRect(cx + 4,   y + 19, 2.5, 2);
+        // braceletes dourados
+        ctx.fillStyle = P.trim;
+        ctx.fillRect(cx - 6.5, y + 14.5, 2.5, 1);
+        ctx.fillRect(cx + 4,   y + 14.5, 2.5, 1);
 
-        // Pescoço e cabeça
+        // Colar de sementes
+        ctx.fillStyle = P.beads;
+        ctx.fillRect(cx - 2.5, y + 10.5, 5, 1);
+        ctx.fillStyle = P.pattern;
+        ctx.fillRect(cx - 0.5, y + 11.3, 1, 1);   // pingente central
+
+        // ── Pescoço e cabeça ──
         ctx.fillStyle = P.skin;
         ctx.fillRect(cx - 1.5, y + 8.5, 3, 2);
         ctx.beginPath();
         ctx.arc(cx, y + 5.5, 4.5, 0, Math.PI * 2);
         ctx.fill();
-        // Sombra do rosto
         ctx.fillStyle = P.skinShade;
         ctx.beginPath();
         ctx.arc(cx + 1.5, y + 6, 3.2, -0.6, 1.3);
         ctx.fill();
 
-        // Cabelo (coque alto + laterais)
+        // ── Cabelo liso preto ──
         ctx.fillStyle = P.hair;
+        ctx.fillRect(cx - 4.9, y + 3, 1.9, 8.5);   // lateral esquerda longa
+        ctx.fillRect(cx + 3,   y + 3, 1.9, 8.5);   // lateral direita longa
         ctx.beginPath();
-        ctx.arc(cx, y + 4, 4.8, Math.PI * 0.95, Math.PI * 2.05);
+        ctx.arc(cx, y + 4, 4.9, Math.PI * 0.92, Math.PI * 2.08);   // calota
         ctx.fill();
-        ctx.beginPath();
-        ctx.arc(cx, y + 0.5, 2.6, 0, Math.PI * 2);   // coque
-        ctx.fill();
-        ctx.fillStyle = P.hairShine;
-        ctx.fillRect(cx - 1, y - 0.5, 1.5, 1);
+        ctx.fillRect(cx - 4.4, y + 2.6, 8.8, 1.6);   // franja reta
 
-        // Coroa de louros dourada
-        ctx.fillStyle = P.laurel;
-        ctx.fillRect(cx - 4.5, y + 2.2, 9, 1.2);
-        ctx.fillRect(cx - 5.2, y + 1.4, 1.6, 1.6);
-        ctx.fillRect(cx + 3.6, y + 1.4, 1.6, 1.6);
+        // ── Cocar (penas + faixa) ──
+        const feather = (fx, h, color) => {
+            ctx.fillStyle = color;
+            ctx.beginPath();
+            ctx.moveTo(cx + fx,       y + 2.5);
+            ctx.lineTo(cx + fx - 1.1, y + 2.5 - h * 0.45);
+            ctx.lineTo(cx + fx,       y + 2.5 - h);
+            ctx.lineTo(cx + fx + 1.1, y + 2.5 - h * 0.45);
+            ctx.closePath();
+            ctx.fill();
+        };
+        feather(-4, 3.5, P.featherR);
+        feather(-2, 4.8, P.featherG);
+        feather( 0, 5.6, P.featherY);
+        feather( 2, 4.8, P.featherG);
+        feather( 4, 3.5, P.featherR);
+        // faixa da testa (por cima das bases das penas)
+        ctx.fillStyle = P.headband;
+        ctx.fillRect(cx - 4.9, y + 2.2, 9.8, 1.7);
+        ctx.fillStyle = P.trim;
+        ctx.fillRect(cx - 4.9, y + 3.2, 9.8, 0.6);   // fio dourado na faixa
+        // contas coloridas na faixa
+        ctx.fillStyle = P.featherY;
+        ctx.fillRect(cx - 3.5, y + 2.5, 0.9, 0.9);
+        ctx.fillRect(cx - 0.4, y + 2.5, 0.9, 0.9);
+        ctx.fillRect(cx + 2.6, y + 2.5, 0.9, 0.9);
 
-        // Olhos
+        // ── Rosto: pintura de urucum + olhos ──
+        ctx.fillStyle = P.paint;
+        ctx.fillRect(cx - 3.2, y + 6.3, 1.9, 0.9);
+        ctx.fillRect(cx + 1.3, y + 6.3, 1.9, 0.9);
         ctx.fillStyle = P.eyes;
         ctx.fillRect(cx - 2.2, y + 5, 1.2, 1.4);
         ctx.fillRect(cx + 1,   y + 5, 1.2, 1.4);
-        // Brilho dos olhos
         ctx.fillStyle = '#fff';
         ctx.fillRect(cx - 1.9, y + 5, 0.5, 0.5);
         ctx.fillRect(cx + 1.3, y + 5, 0.5, 0.5);
-
-        // Fita esvoaçante (animada)
-        const wave = Math.sin(this.glowTimer * 3) * 2;
-        ctx.strokeStyle = P.trim;
-        ctx.lineWidth = 1.2;
-        ctx.beginPath();
-        ctx.moveTo(cx + 4.5, y + 12);
-        ctx.quadraticCurveTo(cx + 9 + wave, y + 15, cx + 8 - wave, y + 21);
-        ctx.stroke();
     }
 
     _drawAura(ctx) {
@@ -2018,6 +2117,11 @@ class Interactable {
         };
     }
 
+    /** Ver NPC.getDetectionBox() — mesma ideia: caixa real usada para interação/debug. */
+    getDetectionBox() {
+        return { x: this.x, y: this.y, width: this.width, height: this.height };
+    }
+
     draw(ctx) {
         if (this.customDraw) {
             this.customDraw(ctx);
@@ -2058,20 +2162,16 @@ class Interactable {
 // ═══════ src/entities/MagicBook.js ═══════
 
 /**
- * MagicBook — o livro encantado da biblioteca que transporta Alex ao templo.
- *
- * Pixel art procedural: tomo antigo flutuando, com fecho dourado,
- * páginas brilhantes e fagulhas que sobem.
+ * MagicBook — o livro antigo já desenhado no tile de fundo da biblioteca
+ * (estante/atril com livro aberto). Esta classe não desenha um livro por
+ * cima: ela só adiciona o brilho mágico (halo pulsante, fagulhas subindo,
+ * indicador "!") ancorado exatamente sobre o tile real, para não duplicar
+ * nem deslocar o visual que já existe no mapa.
  */
 class MagicBook extends Interactable {
 
     static PALETTE = Object.freeze({
-        cover      : '#5d3a1a',
-        coverEdge  : '#3e2712',
-        spine      : '#7a4a21',
-        pages      : '#f3e9c6',
-        clasp      : '#e6b422',
-        runes      : '#ffd75e',
+        runes: '#ffd75e',
     });
 
     constructor(x, y, config = {}) {
@@ -2104,55 +2204,24 @@ class MagicBook extends Interactable {
     }
 
     draw(ctx) {
-        const P   = MagicBook.PALETTE;
-        const bob = Math.sin(this.glowTimer * 2.2) * 1.8;
-        const cx  = this.x + this.width / 2;
-        const top = this.y + bob;
+        const P    = MagicBook.PALETTE;
+        const bob  = Math.sin(this.glowTimer * 2.2) * 1.8;
+        const cx   = this.x + this.width / 2;
+        // Halo deslocado um pouco para baixo e com raio vertical contido dentro
+        // da própria célula do tile, para não invadir a decoração acima (teto)
+        // nem a mesa abaixo.
+        const cy   = this.y + this.height / 2 + 2 + bob;
 
-        // Halo pulsante
         const pulse = 0.25 + Math.sin(this.glowTimer * 3) * 0.12;
         ctx.save();
         ctx.globalAlpha = pulse;
         ctx.fillStyle = this.glowColor;
         ctx.beginPath();
-        ctx.ellipse(cx, top + 7, 13, 9, 0, 0, Math.PI * 2);
+        ctx.ellipse(cx, cy, this.width / 2 + 4, this.height / 2 - 4, 0, 0, Math.PI * 2);
         ctx.fill();
         ctx.restore();
 
-        // Sombra no chão
-        ctx.fillStyle = 'rgba(0,0,0,0.25)';
-        ctx.beginPath();
-        ctx.ellipse(cx, this.y + this.height + 3, 8, 2, 0, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Capa (14x11)
-        ctx.fillStyle = P.coverEdge;
-        ctx.fillRect(cx - 7, top, 14, 11);
-        ctx.fillStyle = P.cover;
-        ctx.fillRect(cx - 6, top + 1, 12, 9);
-
-        // Lombada
-        ctx.fillStyle = P.spine;
-        ctx.fillRect(cx - 7, top, 2.5, 11);
-
-        // Páginas aparecendo na borda
-        ctx.fillStyle = P.pages;
-        ctx.fillRect(cx + 5.4, top + 1.5, 1.6, 8);
-
-        // Fecho dourado
-        ctx.fillStyle = P.clasp;
-        ctx.fillRect(cx + 2.5, top + 4, 3.5, 3);
-
-        // Runa brilhante na capa (pisca)
-        const runeAlpha = 0.6 + Math.sin(this.glowTimer * 5) * 0.4;
-        ctx.save();
-        ctx.globalAlpha = Math.max(0.2, runeAlpha);
-        ctx.fillStyle = P.runes;
-        ctx.fillRect(cx - 3.5, top + 3, 2, 2);
-        ctx.fillRect(cx - 4.2, top + 5.5, 3.4, 1.2);
-        ctx.restore();
-
-        // Fagulhas subindo
+        // Fagulhas subindo (dão a sensação de páginas/magia balançando)
         ctx.fillStyle = P.runes;
         for (const s of this.sparkles) {
             ctx.globalAlpha = Math.max(0, s.life / s.maxLife) * 0.9;
@@ -2160,12 +2229,13 @@ class MagicBook extends Interactable {
         }
         ctx.globalAlpha = 1;
 
-        // Indicador "!"
+        // Indicador "!" — mantido dentro do topo da própria célula do livro,
+        // sem subir sobre a decoração do teto na célula acima.
         const bounceY = Math.sin(this.glowTimer * 4) * 2;
         ctx.fillStyle = '#FFD700';
         ctx.font = 'bold 8px monospace';
         ctx.textAlign = 'center';
-        ctx.fillText('!', cx, top - 6 + bounceY);
+        ctx.fillText('!', cx, this.y + 6 + bounceY);
         ctx.textAlign = 'left';
     }
 }
@@ -5083,7 +5153,8 @@ function rectOverlap(a, b) {
 function checkInteraction() {
     const box = alex.getInteractionBox();
     for (const obj of interactables) {
-        if (rectOverlap(box, obj) && obj.getDialogue) {
+        const objBox = obj.getDetectionBox ? obj.getDetectionBox() : obj;
+        if (rectOverlap(box, objBox) && obj.getDialogue) {
             const { lines, callback } = obj.getDialogue();
             if (lines && lines.length > 0) {
                 if (tutorial.active && tutorial.step === 1) tutorial.setStep(2);
@@ -5156,7 +5227,10 @@ function drawDebugOverlay() {
     ctx.strokeStyle = 'rgba(255,255,0,0.9)';
     ctx.strokeRect(ib.x, ib.y, ib.width, ib.height);
     ctx.strokeStyle = 'rgba(0,255,255,0.5)';
-    for (const o of interactables) ctx.strokeRect(o.x, o.y, o.width, o.height);
+    for (const o of interactables) {
+        const b = o.getDetectionBox ? o.getDetectionBox() : o;
+        ctx.strokeRect(b.x, b.y, b.width, b.height);
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════

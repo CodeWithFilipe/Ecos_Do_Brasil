@@ -1,20 +1,16 @@
 import { Interactable } from './Interactable.js';
 
 /**
- * MagicBook — o livro encantado da biblioteca que transporta Alex ao templo.
- *
- * Pixel art procedural: tomo antigo flutuando, com fecho dourado,
- * páginas brilhantes e fagulhas que sobem.
+ * MagicBook — o livro antigo já desenhado no tile de fundo da biblioteca
+ * (estante/atril com livro aberto). Esta classe não desenha um livro por
+ * cima: ela só adiciona o brilho mágico (halo pulsante, fagulhas subindo,
+ * indicador "!") ancorado exatamente sobre o tile real, para não duplicar
+ * nem deslocar o visual que já existe no mapa.
  */
 export class MagicBook extends Interactable {
 
     static PALETTE = Object.freeze({
-        cover      : '#5d3a1a',
-        coverEdge  : '#3e2712',
-        spine      : '#7a4a21',
-        pages      : '#f3e9c6',
-        clasp      : '#e6b422',
-        runes      : '#ffd75e',
+        runes: '#ffd75e',
     });
 
     constructor(x, y, config = {}) {
@@ -47,55 +43,24 @@ export class MagicBook extends Interactable {
     }
 
     draw(ctx) {
-        const P   = MagicBook.PALETTE;
-        const bob = Math.sin(this.glowTimer * 2.2) * 1.8;
-        const cx  = this.x + this.width / 2;
-        const top = this.y + bob;
+        const P    = MagicBook.PALETTE;
+        const bob  = Math.sin(this.glowTimer * 2.2) * 1.8;
+        const cx   = this.x + this.width / 2;
+        // Halo deslocado um pouco para baixo e com raio vertical contido dentro
+        // da própria célula do tile, para não invadir a decoração acima (teto)
+        // nem a mesa abaixo.
+        const cy   = this.y + this.height / 2 + 2 + bob;
 
-        // Halo pulsante
         const pulse = 0.25 + Math.sin(this.glowTimer * 3) * 0.12;
         ctx.save();
         ctx.globalAlpha = pulse;
         ctx.fillStyle = this.glowColor;
         ctx.beginPath();
-        ctx.ellipse(cx, top + 7, 13, 9, 0, 0, Math.PI * 2);
+        ctx.ellipse(cx, cy, this.width / 2 + 4, this.height / 2 - 4, 0, 0, Math.PI * 2);
         ctx.fill();
         ctx.restore();
 
-        // Sombra no chão
-        ctx.fillStyle = 'rgba(0,0,0,0.25)';
-        ctx.beginPath();
-        ctx.ellipse(cx, this.y + this.height + 3, 8, 2, 0, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Capa (14x11)
-        ctx.fillStyle = P.coverEdge;
-        ctx.fillRect(cx - 7, top, 14, 11);
-        ctx.fillStyle = P.cover;
-        ctx.fillRect(cx - 6, top + 1, 12, 9);
-
-        // Lombada
-        ctx.fillStyle = P.spine;
-        ctx.fillRect(cx - 7, top, 2.5, 11);
-
-        // Páginas aparecendo na borda
-        ctx.fillStyle = P.pages;
-        ctx.fillRect(cx + 5.4, top + 1.5, 1.6, 8);
-
-        // Fecho dourado
-        ctx.fillStyle = P.clasp;
-        ctx.fillRect(cx + 2.5, top + 4, 3.5, 3);
-
-        // Runa brilhante na capa (pisca)
-        const runeAlpha = 0.6 + Math.sin(this.glowTimer * 5) * 0.4;
-        ctx.save();
-        ctx.globalAlpha = Math.max(0.2, runeAlpha);
-        ctx.fillStyle = P.runes;
-        ctx.fillRect(cx - 3.5, top + 3, 2, 2);
-        ctx.fillRect(cx - 4.2, top + 5.5, 3.4, 1.2);
-        ctx.restore();
-
-        // Fagulhas subindo
+        // Fagulhas subindo (dão a sensação de páginas/magia balançando)
         ctx.fillStyle = P.runes;
         for (const s of this.sparkles) {
             ctx.globalAlpha = Math.max(0, s.life / s.maxLife) * 0.9;
@@ -103,12 +68,13 @@ export class MagicBook extends Interactable {
         }
         ctx.globalAlpha = 1;
 
-        // Indicador "!"
+        // Indicador "!" — mantido dentro do topo da própria célula do livro,
+        // sem subir sobre a decoração do teto na célula acima.
         const bounceY = Math.sin(this.glowTimer * 4) * 2;
         ctx.fillStyle = '#FFD700';
         ctx.font = 'bold 8px monospace';
         ctx.textAlign = 'center';
-        ctx.fillText('!', cx, top - 6 + bounceY);
+        ctx.fillText('!', cx, this.y + 6 + bounceY);
         ctx.textAlign = 'left';
     }
 }

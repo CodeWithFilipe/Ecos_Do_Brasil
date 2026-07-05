@@ -1453,7 +1453,8 @@ function rectOverlap(a, b) {
 function checkInteraction() {
     const box = alex.getInteractionBox();
     for (const obj of interactables) {
-        if (rectOverlap(box, obj) && obj.getDialogue) {
+        const objBox = obj.getDetectionBox ? obj.getDetectionBox() : obj;
+        if (rectOverlap(box, objBox) && obj.getDialogue) {
             const { lines, callback } = obj.getDialogue();
             if (lines && lines.length > 0) {
                 if (tutorial.active && tutorial.step === 1) tutorial.setStep(2);
@@ -1526,7 +1527,10 @@ function drawDebugOverlay() {
     ctx.strokeStyle = 'rgba(255,255,0,0.9)';
     ctx.strokeRect(ib.x, ib.y, ib.width, ib.height);
     ctx.strokeStyle = 'rgba(0,255,255,0.5)';
-    for (const o of interactables) ctx.strokeRect(o.x, o.y, o.width, o.height);
+    for (const o of interactables) {
+        const b = o.getDetectionBox ? o.getDetectionBox() : o;
+        ctx.strokeRect(b.x, b.y, b.width, b.height);
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════

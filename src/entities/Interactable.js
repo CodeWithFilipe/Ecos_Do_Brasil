@@ -44,6 +44,11 @@ export class Interactable {
         };
     }
 
+    /** Ver NPC.getDetectionBox() — mesma ideia: caixa real usada para interação/debug. */
+    getDetectionBox() {
+        return { x: this.x, y: this.y, width: this.width, height: this.height };
+    }
+
     draw(ctx) {
         if (this.customDraw) {
             this.customDraw(ctx);

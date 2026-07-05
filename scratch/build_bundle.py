@@ -45,7 +45,7 @@ def main():
     embedded = {}
     for f in sorted(os.listdir(maps_dir)):
         if f.endswith('.tmj'):
-            with open(os.path.join(maps_dir, f), encoding='utf-8') as fh:
+            with open(os.path.join(maps_dir, f), encoding='utf-8-sig') as fh:
                 embedded[f] = json.load(fh)
     os.makedirs(os.path.join(out, 'assets', 'maps'), exist_ok=True)
     with open(os.path.join(out, 'assets', 'maps', 'maps_data.js'), 'w', encoding='utf-8') as fh:

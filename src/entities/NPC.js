@@ -386,6 +386,17 @@ export class NPC {
         };
     }
 
+    /**
+     * Caixa usada para detectar interação (checkInteraction) e para o overlay
+     * de debug (F3). Por padrão é a própria x/y/width/height do NPC — correto
+     * para o desenho pixelart genérico, que preenche essa caixa. Subclasses com
+     * desenho próprio cujo visual real não coincide com essa caixa (ex.: Clio)
+     * devem sobrescrever este método para refletir as dimensões reais desenhadas.
+     */
+    getDetectionBox() {
+        return { x: this.x, y: this.y, width: this.width, height: this.height };
+    }
+
     _drawNameTag(ctx) {
         const cx = this.x + this.width / 2;
         const topY = this.y - this._visualTopOffset();
