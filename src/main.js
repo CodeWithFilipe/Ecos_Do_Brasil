@@ -21,21 +21,15 @@ import { EndingScreen }    from './ui/EndingScreen.js';
 import { ControlsScreen }  from './ui/ControlsScreen.js';
 import { Map }             from './world/Map.js';
 import { VIEW, WORLD_SCALE, SCREEN, font, TYPE, SPACE } from './ui/theme.js';
-
-// ═══════════════════════════════════════════════════════════════
-// CANVAS & SISTEMAS GLOBAIS
-// ═══════════════════════════════════════════════════════════════
 const canvas = document.getElementById('gameCanvas');
 const ctx    = canvas.getContext('2d');
 canvas.width  = SCREEN.W;
 canvas.height = SCREEN.H;
-
 const input        = new Input();
 const camera       = new Camera(VIEW.W, VIEW.H);
 const sceneManager = new SceneManager(canvas, ctx);
 const gameState    = new GameState();
 const audio        = new AudioManager();
-
 let gameMap       = null;
 let alex          = null;
 let dialogueBox   = null;
@@ -57,17 +51,11 @@ let jWasDown      = false;
 let tWasDown      = false;
 let hWasDown      = false;
 let gameReady     = false;
-let nextSpawnDoor = null;   // porta para respawn inteligente (ex.: 'porta_cambio')
+let nextSpawnDoor = null;   
 let currentSceneName   = 'biblioteca';
 let lastSavedInfoCount = 0;
 let puzzleChancesLeft  = 3;
-
-// Debug (F3)
 let debugMode = false;
-
-// ═══════════════════════════════════════════════════════════════
-// CONFIGURAÇÃO DECLARATIVA DOS ATOS
-// ═══════════════════════════════════════════════════════════════
 const ACTS = Object.freeze({
     1: {
         scene : 'vila_rica',
@@ -118,23 +106,11 @@ const ACTS = Object.freeze({
         ],
     },
 });
-
-/** Cenas em que o botão "Voltar ao Templo" fica disponível. */
 const SCENES_WITH_RETURN = new Set([
     'vila_rica', 'cambio', 'igreja', 'taverna', 'rio_de_janeiro', 'sao_paulo',
 ]);
-
 const PUZZLE_MAX_CHANCES = 3;
-
-/**
- * Folga (px por lado) da área de detecção de TODAS as portas/transições de mapa.
- * Expande a caixa de detecção ao redor da posição real da porta para que o
- * "Pressione E para entrar" seja reconhecido ao chegar perto de qualquer
- * direção razoável, sem exigir alinhamento pixel-perfeito.
- */
 const DOOR_DETECT_PAD = 16;
-
-// Música por cena
 const MUSIC_BY_SCENE = {
     biblioteca     : 'musica_biblioteca',
     templo         : 'musica_templo',
@@ -146,16 +122,11 @@ const MUSIC_BY_SCENE = {
     sao_paulo      : 'musica_sao_paulo',
     vitoria        : 'musica_vitoria',
 };
-
-// ═══════════════════════════════════════════════════════════════
-// ENTRADA GLOBAL (teclado/mouse)
-// ═══════════════════════════════════════════════════════════════
 window.addEventListener('keydown', e => {
     audio.unlock();
     if (e.code === 'F3')   { debugMode = !debugMode; e.preventDefault(); }
     if (e.code === 'KeyM') audio.toggleMute();
 });
-
 canvas.addEventListener('click', e => {
     if (!gameReady || !returnButton) return;
     const p = canvasPoint(e);
@@ -163,14 +134,11 @@ canvas.addEventListener('click', e => {
         goToTemplo();
     }
 });
-
 canvas.addEventListener('mousemove', e => {
     if (!gameReady || !returnButton) return;
     const p = canvasPoint(e);
     returnButton.setHover(p.x, p.y);
 });
-
-/** Converte coordenadas de mouse para o espaço do canvas. */
 function canvasPoint(e) {
     const rect = canvas.getBoundingClientRect();
     return {
@@ -178,20 +146,14 @@ function canvasPoint(e) {
         y: (e.clientY - rect.top) * (canvas.height / rect.height),
     };
 }
-
 function canUseReturnButton() {
     return returnButton.visible && !dialogueBox.active &&
            !puzzleUI.active && !journal.active && !sceneManager.transitioning;
 }
-
 function goToTemplo() {
     audio.playSfx('sfx_confirm');
     loadScene('templo');
 }
-
-// ═══════════════════════════════════════════════════════════════
-// ESCALA RESPONSIVA (preenche a janela, mantém proporção)
-// ═══════════════════════════════════════════════════════════════
 function resizeCanvas() {
     const k = Math.max(0.5, Math.min(
         window.innerWidth  / canvas.width,
@@ -202,14 +164,8 @@ function resizeCanvas() {
 }
 window.addEventListener('resize', resizeCanvas);
 resizeCanvas();
-
-// ═══════════════════════════════════════════════════════════════
-// REGISTRO DE IMAGENS
-// ═══════════════════════════════════════════════════════════════
 const IMAGES = {};
-
 const IMAGE_SOURCES = {
-    // Tilesets
     'Library sprite sheet-00'     : './assets/sprites/tilesets/Library sprite sheet-00.png',
     'atlas_32x'                   : './assets/sprites/tilesets/interior.png',
     'atlas_16x'                   : './assets/sprites/tilesets/overworld.png',
@@ -217,8 +173,6 @@ const IMAGE_SOURCES = {
     'atlzzas'                     : './assets/sprites/tilesets/market.png',
     'GothicFurnitureSprites48x48' : './assets/sprites/tilesets/GothicFurnitureSprites48x48.png',
     'interior16'                  : './assets/sprites/tilesets/interior16.png',
-
-    // Tilesets (basename match)
     'exterior'     : './assets/sprites/tilesets/exterior.png',
     'farming'      : './assets/sprites/tilesets/farming.png',
     'interior'     : './assets/sprites/tilesets/interior.png',
@@ -227,15 +181,10 @@ const IMAGE_SOURCES = {
     'download (1)' : './assets/sprites/tilesets/download (1).png',
     'download'     : './assets/sprites/tilesets/download.png',
     'republica'    : './assets/sprites/tilesets/republica.png',
-
-    // Player
     'player'     : './assets/sprites/personagens/Player.png',
     'playerLeft' : './assets/sprites/personagens/PlayerLeft.png',
-
-    // NPCs (Characters_V3: grade 16x16, 1 personagem por linha, colunas 4-5 = frente)
     'characters' : './assets/sprites/npcs/Characters_V3_Colour.png',
 };
-
 function loadImage(src) {
     return new Promise(resolve => {
         const img = new Image();
@@ -244,19 +193,13 @@ function loadImage(src) {
         img.src = src;
     });
 }
-
 async function loadAllImages() {
     const entries = Object.entries(IMAGE_SOURCES);
     const results = await Promise.all(entries.map(([, src]) => loadImage(src)));
     entries.forEach(([key], i) => { if (results[i]) IMAGES[key] = results[i]; });
     console.log(`📦 ${Object.keys(IMAGES).length} imagens carregadas`);
 }
-
-// ═══════════════════════════════════════════════════════════════
-// CARREGAMENTO DE MAPA
-// ═══════════════════════════════════════════════════════════════
 async function fetchMap(filename) {
-    // Mapas embutidos (permite abrir o jogo por file://, sem servidor)
     if (window.EMBEDDED_MAPS && window.EMBEDDED_MAPS[filename]) {
         return window.EMBEDDED_MAPS[filename];
     }
@@ -264,14 +207,9 @@ async function fetchMap(filename) {
     if (!resp.ok) throw new Error(`HTTP ${resp.status} — ${filename}`);
     return resp.json();
 }
-
 function buildMap(mapData) {
     return new Map(mapData, IMAGES);
 }
-
-// ═══════════════════════════════════════════════════════════════
-// SPRITES DOS NPCs (Characters_V3_Colour.png — 1 personagem/linha)
-// ═══════════════════════════════════════════════════════════════
 const CHAR_ROWS = {
     trabalhador : 0,
     velho       : 1,
@@ -289,8 +227,6 @@ const CHAR_ROWS = {
     moreno      : 17,
     dama_flor   : 19,
 };
-
-/** Config de sprite p/ NPC; retorna {} se a sheet não carregou (fallback). */
 function charSprite(rowName) {
     const row = CHAR_ROWS[rowName];
     if (row === undefined || !IMAGES['characters']) return {};
@@ -303,12 +239,6 @@ function charSprite(rowName) {
         width: 16, height: 16,
     };
 }
-
-// ═══════════════════════════════════════════════════════════════
-// FLUXO DO TEMPLO (puzzle com chances + retorno automático)
-// ═══════════════════════════════════════════════════════════════
-
-/** Diálogo padrão de Arasy quando ainda faltam informações; devolve à fase. */
 function buildArasyIncomplete(act) {
     const total = gameState.getRequiredInfoCount();
     return {
@@ -320,33 +250,27 @@ function buildArasyIncomplete(act) {
         onDone: () => loadScene(ACTS[act].scene),
     };
 }
-
-/** Inicia (ou reinicia) o puzzle do ato atual respeitando as chances. */
 function startPuzzleWithChances() {
     puzzleUI.setAttemptsLeft(puzzleChancesLeft);
     puzzleUI.start(onPuzzleCorrect, onPuzzleWrong);
 }
-
 function onPuzzleCorrect() {
     audio.playSfx('sfx_confirm');
     const act = gameState.act;
     gameState.completeCurrentAct();
-
     dialogueBox.show(ACTS[act].successLines, () => {
         if (act < 3) {
             gameState.act = act + 1;
             loadScene(ACTS[gameState.act].scene);
         } else {
-            loadScene('biblioteca'); // professora aguarda o quiz final
+            loadScene('biblioteca'); 
         }
     });
     SaveSystem.save(gameState, currentSceneName);
 }
-
 function onPuzzleWrong() {
     audio.playSfx('sfx_error');
     puzzleChancesLeft--;
-
     if (puzzleChancesLeft > 0) {
         dialogueBox.show([
             { speaker: 'Arasy', text: `A névoa embaralhou o tempo... Ainda lhe restam ${puzzleChancesLeft} tentativa(s).` },
@@ -354,22 +278,17 @@ function onPuzzleWrong() {
         ], startPuzzleWithChances);
         return;
     }
-
-    // Chances esgotadas: perde as infos da fase e volta para recoletá-las
     gameState.clearCurrentActInfos();
     dialogueBox.show([
         { speaker: 'Arasy', text: 'A névoa venceu desta vez... e as memórias se dispersaram como fumaça.' },
         { speaker: 'Arasy', text: 'Não é vergonha recomeçar. Volte àquele tempo e reconstrua a verdade, voz por voz.' },
     ], () => loadScene(ACTS[gameState.act].scene));
 }
-
-/** Monta a Arasy do templo conforme o progresso. */
 function buildTemploArasy(map) {
     const deusa  = map.mapObjects.find(o => o.name === 'deusa_item');
     const arasyX = deusa ? deusa.x + deusa.width / 2 - 9 : map.spawnPoint.x;
     const arasyY = deusa ? deusa.y + deusa.height - 26 : map.spawnPoint.y - 80;
     const arasy  = new Arasy(arasyX, arasyY);
-
     if (!gameState.arasyMet) {
         arasy.dialogueLines = [
             { speaker: 'Arasy', text: 'Aproxime-se sem medo. A água e a pedra já sabiam que você viria.' },
@@ -389,9 +308,7 @@ function buildTemploArasy(map) {
         };
         return arasy;
     }
-
     arasy.hasBeenIntroduced = true;
-
     if (gameState.hasAllInfos()) {
         arasy.dialogueLines = ACTS[gameState.act].arasyBrief;
         arasy.onInteractComplete = () => {
@@ -402,19 +319,11 @@ function buildTemploArasy(map) {
         const { lines, onDone } = buildArasyIncomplete(gameState.act);
         arasy.dialogueLines = lines;
         arasy.onInteractComplete = onDone;
-        arasy.afterDialogueLines = lines;   // sempre devolve à fase
+        arasy.afterDialogueLines = lines;   
     }
     return arasy;
 }
-
-// ═══════════════════════════════════════════════════════════════
-// DEFINIÇÃO DAS CENAS
-// ═══════════════════════════════════════════════════════════════
 const SCENES = {
-
-    // ─────────────────────────────────────────────
-    // BIBLIOTECA (Tutorial — início do jogo & quiz final)
-    // ─────────────────────────────────────────────
     biblioteca: {
         file: 'biblioteca.tmj',
         setup(map) {
@@ -423,19 +332,15 @@ const SCENES = {
             interactables = [];
             gameState.currentPhase = 'biblioteca';
             infoPanel.active = false;
-
             if (gameState.gameWon) {
                 this._setupQuizFinale(map);
             } else {
                 this._setupIntro(map);
             }
         },
-
-        /** Início do jogo: tutorial + professora + bibliotecária + livro. */
         _setupIntro(map) {
             tutorial.active = true;
             tutorial.step = 0;
-
             const professora = new NPC(map.spawnPoint.x - 80, map.spawnPoint.y - 120, {
                 name: 'Professora',
                 color: '#6B3FA0', accentColor: '#2d1e4f',
@@ -456,7 +361,6 @@ const SCENES = {
                 },
             });
             interactables.push(professora);
-
             const bibliotecaria = new NPC(map.spawnPoint.x + 80, map.spawnPoint.y - 200, {
                 name: 'Bibliotecária',
                 color: '#2E7D32', accentColor: '#5d4037',
@@ -477,7 +381,6 @@ const SCENES = {
                 },
             });
             interactables.push(bibliotecaria);
-
             const diario = map.mapObjects.find(o => o.name === 'item_diario');
             if (diario) {
                 interactables.push(new MagicBook(diario.x, diario.y, {
@@ -497,11 +400,8 @@ const SCENES = {
                 }));
             }
         },
-
-        /** Fase final: quiz da professora. */
         _setupQuizFinale(map) {
             tutorial.active = false;
-
             const bibliotecaria = new NPC(map.spawnPoint.x + 80, map.spawnPoint.y - 200, {
                 name: 'Bibliotecária',
                 color: '#2E7D32', accentColor: '#5d4037',
@@ -513,7 +413,6 @@ const SCENES = {
                 ],
             });
             interactables.push(bibliotecaria);
-
             const startQuiz = () => {
                 dialogueBox.show([
                     { speaker: 'Professora', text: 'Alex! Que bom que voltou. Terminou o seu trabalho de pesquisa?' },
@@ -521,7 +420,6 @@ const SCENES = {
                     { speaker: 'Professora', text: 'Excelente! Mas antes de aceitar seu trabalho, farei 3 perguntas rápidas para testar o seu aprendizado.' },
                 ], askQ1);
             };
-
             const askQ1 = () => {
                 dialogueBox.showChoices(
                     'Professora',
@@ -546,7 +444,6 @@ const SCENES = {
                         }
                     });
             };
-
             const askQ2 = () => {
                 dialogueBox.showChoices(
                     'Professora',
@@ -571,7 +468,6 @@ const SCENES = {
                         }
                     });
             };
-
             const askQ3 = () => {
                 dialogueBox.showChoices(
                     'Professora',
@@ -598,7 +494,6 @@ const SCENES = {
                         }
                     });
             };
-
             const professora = new NPC(map.spawnPoint.x - 80, map.spawnPoint.y - 120, {
                 name: 'Professora',
                 color: '#6B3FA0', accentColor: '#2d1e4f',
@@ -612,10 +507,6 @@ const SCENES = {
             interactables.push(professora);
         },
     },
-
-    // ─────────────────────────────────────────────
-    // TEMPLO (hub temporal — Arasy + estátuas das fases)
-    // ─────────────────────────────────────────────
     templo: {
         file: 'templo.tmj',
         setup(map) {
@@ -627,8 +518,6 @@ const SCENES = {
             tutorial.active = false;
             infoPanel.active = false;
             puzzleChancesLeft = PUZZLE_MAX_CHANCES;
-
-            // Estátuas das três fases (quebradas → restauradas) — já interativas (lore)
             for (const act of [1, 2, 3]) {
                 const obj = map.mapObjects.find(o => o.name === `estatua_fase${act}`);
                 if (obj) {
@@ -637,16 +526,8 @@ const SCENES = {
                     }));
                 }
             }
-
-            // Domínio natural de Arasy: vitórias-régias + fio de cachoeira sobre os
-            // dois poços d'água (tiles reaproveitados de farming.png / Vila Rica).
-            // Posições casam com os poços 2x2 do templo.tmj compacto (centros).
             interactables.push(new SacredSpring(256, 128));
             interactables.push(new SacredSpring(448, 128));
-
-            // Tomos dourados: livros-monumento interativos com pequenas lores da
-            // memória histórica (tile do "livro mágico" reaproveitado). Posições
-            // casam com os tiles de livro colocados em templo.tmj.
             const TOMOS = [
                 { x: 160, y: 288, name: 'Tomo dos Primeiros Povos',
                   text: 'Muito antes de 1500, milhares de povos indígenas já viviam, comerciavam e guardavam suas histórias nesta terra.' },
@@ -669,10 +550,7 @@ const SCENES = {
                     ],
                 }));
             }
-
             interactables.push(buildTemploArasy(map));
-
-            // Portal dinâmico para a fase atual
             if (gameState.arasyMet && !gameState.gameWon) {
                 const target = ACTS[gameState.act];
                 interactables.push(new Interactable(map.spawnPoint.x - 20, map.spawnPoint.y + 16, {
@@ -685,10 +563,6 @@ const SCENES = {
             }
         },
     },
-
-    // ─────────────────────────────────────────────
-    // VILA RICA (hub de investigação — ato 1)
-    // ─────────────────────────────────────────────
     vila_rica: {
         file: 'praca.tmj',
         setup(map) {
@@ -710,8 +584,6 @@ const SCENES = {
             gameState.currentPhase = 'vila_rica';
             tutorial.active = false;
             infoPanel.active = true;
-
-            // Vendedor do Mercado (info falsa: pão de queijo)
             const estatua = map.mapObjects.find(o => o.name === 'estatua_tiradentes');
             if (estatua) {
                 const info = GameState.INFO_DATA.vila_rica[3];
@@ -737,8 +609,6 @@ const SCENES = {
                     },
                 }));
             }
-
-            // Portais para os interiores
             const doors = [
                 { obj: 'porta_cambio',  scene: 'cambio',  label: 'Casa de Câmbio' },
                 { obj: 'porta_igreja',  scene: 'igreja',  label: 'Igreja' },
@@ -758,10 +628,6 @@ const SCENES = {
             }
         },
     },
-
-    // ─────────────────────────────────────────────
-    // CASA DE CÂMBIO (info verdadeira: Derrama)
-    // ─────────────────────────────────────────────
     cambio: {
         file: 'cambio.tmj',
         setup(map) {
@@ -769,12 +635,10 @@ const SCENES = {
             alex.y = map.spawnPoint.y;
             interactables = [];
             infoPanel.active = true;
-
             const info = GameState.INFO_DATA.vila_rica[0];
             const anchor = map.mapObjects.find(o => o.name === 'cambio_item');
             const npcX = anchor ? anchor.x + 10 : map.spawnPoint.x + 40;
             const npcY = anchor ? anchor.y + 30 : map.spawnPoint.y - 60;
-
             interactables.push(new NPC(npcX, npcY, {
                 name: 'Mineiro Revoltado',
                 color: '#D84315', accentColor: '#4a2c2a',
@@ -797,7 +661,6 @@ const SCENES = {
                     if (gameState.addInfo(info)) infoPanel.notifyNewInfo(info.title);
                 },
             }));
-
             const saida = map.mapObjects.find(o => o.name === 'saida_casa');
             if (saida) {
                 interactables.push(new Interactable(saida.x, saida.y, {
@@ -813,10 +676,6 @@ const SCENES = {
             }
         },
     },
-
-    // ─────────────────────────────────────────────
-    // IGREJA (info verdadeira: traição)
-    // ─────────────────────────────────────────────
     igreja: {
         file: 'igreja.tmj',
         setup(map) {
@@ -824,12 +683,10 @@ const SCENES = {
             alex.y = map.spawnPoint.y;
             interactables = [];
             infoPanel.active = true;
-
             const info = GameState.INFO_DATA.vila_rica[2];
             const anchor = map.mapObjects.find(o => o.name === 'item_confissao');
             const npcX = anchor ? anchor.x + 10 : 150;
             const npcY = anchor ? anchor.y + 30 : 80;
-
             interactables.push(new NPC(npcX, npcY, {
                 name: 'Espião da Coroa',
                 color: '#37474F', accentColor: '#1a1a2e',
@@ -853,7 +710,6 @@ const SCENES = {
                     if (gameState.addInfo(info)) infoPanel.notifyNewInfo(info.title);
                 },
             }));
-
             const saida = map.mapObjects.find(o => o.name === 'saida_igreja');
             if (saida) {
                 interactables.push(new Interactable(saida.x, saida.y, {
@@ -869,10 +725,6 @@ const SCENES = {
             }
         },
     },
-
-    // ─────────────────────────────────────────────
-    // TAVERNA (info falsa: dentaduras)
-    // ─────────────────────────────────────────────
     taverna: {
         file: 'taverna.tmj',
         setup(map) {
@@ -880,12 +732,10 @@ const SCENES = {
             alex.y = map.spawnPoint.y;
             interactables = [];
             infoPanel.active = true;
-
             const info = GameState.INFO_DATA.vila_rica[1];
             const anchor = map.mapObjects.find(o => o.name === 'item_mapa');
             const npcX = anchor ? anchor.x - 30 : map.spawnPoint.x + 40;
             const npcY = anchor ? anchor.y + 20 : map.spawnPoint.y - 80;
-
             interactables.push(new NPC(npcX, npcY, {
                 name: 'Contador de Histórias',
                 color: '#E65100', accentColor: '#bf360c',
@@ -909,7 +759,6 @@ const SCENES = {
                     if (gameState.addInfo(info)) infoPanel.notifyNewInfo(info.title);
                 },
             }));
-
             const saida = map.mapObjects.find(o => o.name === 'saida_taverna');
             if (saida) {
                 interactables.push(new Interactable(saida.x, saida.y, {
@@ -925,10 +774,6 @@ const SCENES = {
             }
         },
     },
-
-    // ─────────────────────────────────────────────
-    // RIO DE JANEIRO (Paço Imperial — ato 2)
-    // ─────────────────────────────────────────────
     rio_de_janeiro: {
         file: 'pacoimperial.tmj',
         setup(map) {
@@ -938,7 +783,6 @@ const SCENES = {
             gameState.currentPhase = 'rio_de_janeiro';
             infoPanel.active = true;
             tutorial.active = false;
-
             const D = GameState.INFO_DATA.rio_de_janeiro;
             const npcs = [
                 {
@@ -1012,10 +856,6 @@ const SCENES = {
             spawnInfoNpcs(npcs);
         },
     },
-
-    // ─────────────────────────────────────────────
-    // SÃO PAULO (Salão da Abolição — ato 3)
-    // ─────────────────────────────────────────────
     sao_paulo: {
         file: 'gabineterepublica.tmj',
         setup(map) {
@@ -1025,7 +865,6 @@ const SCENES = {
             gameState.currentPhase = 'sao_paulo';
             infoPanel.active = true;
             tutorial.active = false;
-
             const D = GameState.INFO_DATA.sao_paulo;
             const npcs = [
                 {
@@ -1112,10 +951,6 @@ const SCENES = {
             spawnInfoNpcs(npcs);
         },
     },
-
-    // ─────────────────────────────────────────────
-    // VITÓRIA (créditos)
-    // ─────────────────────────────────────────────
     vitoria: {
         file: 'templo.tmj',
         setup(map) {
@@ -1124,13 +959,10 @@ const SCENES = {
             interactables = [];
             infoPanel.active = false;
             tutorial.active = false;
-
-            // Estátuas restauradas como cenário da celebração
             for (const act of [1, 2, 3]) {
                 const obj = map.mapObjects.find(o => o.name === `estatua_fase${act}`);
                 if (obj) interactables.push(new PhaseStatue(obj.x, obj.y, act, gameState));
             }
-
             setTimeout(() => {
                 dialogueBox.show([
                     { speaker: 'Arasy', text: 'Olhe, Alex... os três tótens estão inteiros de novo. A terra respira aliviada.' },
@@ -1147,11 +979,6 @@ const SCENES = {
         },
     },
 };
-
-/**
- * Cria os NPCs informantes de uma fase a partir de uma tabela declarativa.
- * Cada spec: { info, x, y, sprite, name, color, accent, open[], close[], after[] }
- */
 function spawnInfoNpcs(specs) {
     for (const s of specs) {
         interactables.push(new NPC(s.x, s.y, {
@@ -1172,40 +999,28 @@ function spawnInfoNpcs(specs) {
         }));
     }
 }
-
-// ═══════════════════════════════════════════════════════════════
-// CARREGAR CENA (com fade + música + save)
-// ═══════════════════════════════════════════════════════════════
 async function loadScene(sceneName) {
     const scene = SCENES[sceneName];
     if (!scene) { console.error('Cena desconhecida:', sceneName); return; }
-
     audio.playSfx('sfx_portal');
-
     sceneManager.transitionTo(sceneName, async () => {
         try {
             const mapData = await fetchMap(scene.file);
             gameMap = buildMap(mapData);
             camera.setBounds(gameMap.widthPx, gameMap.heightPx);
-
             scene.setup(gameMap);
             alex.resolveCollision(gameMap);
-
             camera.x = alex.x + alex.width / 2  - camera.width / 2;
             camera.y = alex.y + alex.height / 2 - camera.height / 2;
             camera.x = Math.max(0, Math.min(camera.x, gameMap.widthPx  - camera.width));
             camera.y = Math.max(0, Math.min(camera.y, gameMap.heightPx - camera.height));
-
             returnButton.setVisible(SCENES_WITH_RETURN.has(sceneName));
-
             console.log(`🗺️ Cena "${sceneName}" — infos: ${gameState.getInfoCount()}/${gameState.getRequiredInfoCount()}`);
-
             audio.playMusic(MUSIC_BY_SCENE[sceneName]);
-
             currentSceneName   = sceneName;
             lastSavedInfoCount = gameState.getInfoCount();
             if (sceneName === 'vitoria') {
-                SaveSystem.clear();   // jogo concluído: próximo boot inicia do zero
+                SaveSystem.clear();   
             } else {
                 SaveSystem.save(gameState, sceneName);
             }
@@ -1214,15 +1029,9 @@ async function loadScene(sceneName) {
         }
     });
 }
-
-// ═══════════════════════════════════════════════════════════════
-// INICIALIZAÇÃO
-// ═══════════════════════════════════════════════════════════════
 async function init() {
     console.log('🎮 Ecos do Brasil — Inicializando...');
-
     await loadAllImages();
-
     alex = new Player(0, 0, {
         spriteSheet : IMAGES['player'],
         spriteLeft  : IMAGES['playerLeft'],
@@ -1234,7 +1043,6 @@ async function init() {
         speed       : 110,
         animSpeed   : 0.12,
     });
-
     dialogueBox  = new DialogueBox(canvas, ctx);
     infoPanel    = new InfoPanel(canvas, ctx, gameState);
     puzzleUI     = new PuzzleUI(canvas, ctx, gameState);
@@ -1243,9 +1051,7 @@ async function init() {
     returnButton = new ReturnButton(canvas, ctx);
     endingScreen = new EndingScreen(canvas, ctx, gameState);
     controlsScreen = new ControlsScreen(canvas, ctx);
-
     setupPortraits();
-
     try {
         const mapData = await fetchMap(SCENES.biblioteca.file);
         gameMap = buildMap(mapData);
@@ -1258,16 +1064,12 @@ async function init() {
         console.error('❌ Biblioteca não carregou:', err);
         return;
     }
-
     console.log('✅ Jogo pronto! H = controles, J = diário, T = voltar ao templo, M = som, F3 = debug');
     gameReady = true;
     audio.playMusic(MUSIC_BY_SCENE['biblioteca']);
     requestAnimationFrame(gameLoop);
-
     offerContinueIfSaved();
 }
-
-/** Retratos da caixa de diálogo (chave = nome usado nas falas). */
 function setupPortraits() {
     if (!IMAGES['characters']) return;
     const P = row => ({ img: IMAGES['characters'], sx: 4 * 16, sy: row * 16, sw: 16, sh: 16 });
@@ -1298,14 +1100,11 @@ function setupPortraits() {
         dialogueBox.portraits['Alex'] = { img: IMAGES['player'], sx: 0, sy: 4 * 32, sw: 32, sh: 32 };
     }
 }
-
-/** Oferece "Continuar / Novo jogo" se houver save com progresso real. */
 function offerContinueIfSaved() {
     const saved = SaveSystem.load();
     const hasProgress = saved && (saved.scene !== 'biblioteca' || saved.state.infoIds.length > 0 ||
                                   saved.state.bookFound || saved.state.talkedToTeacher);
     if (!hasProgress) return;
-
     tutorial.active = false;
     dialogueBox.showChoices(
         'Sistema',
@@ -1323,60 +1122,43 @@ function offerContinueIfSaved() {
             }
         });
 }
-
-// ═══════════════════════════════════════════════════════════════
-// GAME LOOP
-// ═══════════════════════════════════════════════════════════════
 function gameLoop(now) {
     const dt = Math.min((now - lastTime) / 1000, 0.1);
     lastTime = now;
     if (gameReady) { update(dt); draw(); }
     requestAnimationFrame(gameLoop);
 }
-
 function update(dt) {
     sceneManager.update(dt);
     if (sceneManager.transitioning) return;
-
     if (endingScreen.active) {
         endingScreen.update(dt);
         handleEndingInput();
         return;
     }
-
     if (handleControlsInput(dt)) return;
-
     if (handleJournalInput(dt)) return;
-
     if (puzzleUI.active) {
         puzzleUI.update(dt);
         return;
     }
-
     if (handleChoicesInput(dt)) return;
-
     upWasDown = false;
     downWasDown = false;
-
     handleReturnShortcut();
-
     if (!dialogueBox.active) {
         alex.update(dt, input, gameMap, interactables);
         camera.update(dt, alex);
         if (tutorial.active && tutorial.step === 0 && alex.hasMoved) tutorial.setStep(1);
     }
-
     dialogueBox.update(dt);
     tutorial.update(dt);
     infoPanel.update(dt);
     for (const obj of interactables) if (obj.update) obj.update(dt);
-
     checkSpawnTemploPortal();
     autosaveOnNewInfo();
     handleInteractionKey();
 }
-
-/** Tela final (ESPAÇO): recomeça a jornada do zero. */
 function handleEndingInput() {
     const confirm = input.isDown('Space') || input.isDown('KeyE') || input.isDown('Enter');
     if (confirm && !spaceWasDown) {
@@ -1389,8 +1171,6 @@ function handleEndingInput() {
     }
     spaceWasDown = confirm;
 }
-
-/** Tela de controles (H): toggle. Retorna true se consumiu o frame. */
 function handleControlsInput(dt) {
     const hDown = input.isDown('KeyH');
     if (hDown && !hWasDown) {
@@ -1402,13 +1182,10 @@ function handleControlsInput(dt) {
         }
     }
     hWasDown = hDown;
-
     if (!controlsScreen.active) return false;
     controlsScreen.update(dt);
     return true;
 }
-
-/** Diário (J): toggle + navegação. Retorna true se consumiu o frame. */
 function handleJournalInput(dt) {
     const jDown = input.isDown('KeyJ');
     if (jDown && !jWasDown) {
@@ -1420,9 +1197,7 @@ function handleJournalInput(dt) {
         }
     }
     jWasDown = jDown;
-
     if (!journal.active) return false;
-
     const up    = input.isDown('ArrowUp')    || input.isDown('KeyW');
     const down  = input.isDown('ArrowDown')  || input.isDown('KeyS');
     const left  = input.isDown('ArrowLeft')  || input.isDown('KeyA');
@@ -1438,38 +1213,30 @@ function handleJournalInput(dt) {
     journal.update(dt);
     return true;
 }
-
-/** Alternativas de diálogo (setas + confirmar). Retorna true se ativo. */
 function handleChoicesInput(dt) {
     if (!(dialogueBox.active && dialogueBox.options && dialogueBox.options.length > 0)) return false;
-
     const up   = input.isDown('ArrowUp')   || input.isDown('KeyW');
     const down = input.isDown('ArrowDown') || input.isDown('KeyS');
     if (up && !upWasDown)        dialogueBox.navigateOptions(-1);
     else if (down && !downWasDown) dialogueBox.navigateOptions(1);
     upWasDown = up;
     downWasDown = down;
-
     const confirm = input.isDown('Space') || input.isDown('KeyE') || input.isDown('Enter');
     if (confirm && !spaceWasDown) {
         audio.playSfx('sfx_confirm');
         dialogueBox.selectCurrentOption();
     }
     spaceWasDown = confirm;
-
     dialogueBox.update(dt);
     tutorial.update(dt);
     infoPanel.update(dt);
     return true;
 }
-
-/** Tecla T: voltar ao templo (equivalente ao botão). */
 function handleReturnShortcut() {
     const tDown = input.isDown('KeyT');
     if (tDown && !tWasDown && canUseReturnButton()) goToTemplo();
     tWasDown = tDown;
 }
-
 function autosaveOnNewInfo() {
     const count = gameState.getInfoCount();
     if (count !== lastSavedInfoCount) {
@@ -1478,7 +1245,6 @@ function autosaveOnNewInfo() {
         SaveSystem.save(gameState, currentSceneName);
     }
 }
-
 function handleInteractionKey() {
     const space = input.isDown('Space') || input.isDown('KeyE');
     if (space && !spaceWasDown) {
@@ -1491,15 +1257,10 @@ function handleInteractionKey() {
     }
     spaceWasDown = space;
 }
-
-// ═══════════════════════════════════════════════════════════════
-// INTERAÇÃO
-// ═══════════════════════════════════════════════════════════════
 function rectOverlap(a, b) {
     return a.x < b.x + b.width  && a.x + a.width  > b.x &&
            a.y < b.y + b.height && a.y + a.height > b.y;
 }
-
 function checkInteraction() {
     const box = alex.getInteractionBox();
     for (const obj of interactables) {
@@ -1514,38 +1275,25 @@ function checkInteraction() {
         }
     }
 }
-
-// ═══════════════════════════════════════════════════════════════
-// RENDERIZAÇÃO
-// ═══════════════════════════════════════════════════════════════
 function draw() {
     ctx.fillStyle = '#120d0a';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-
     if (puzzleUI.active) {
         puzzleUI.draw();
         return;
     }
-
-    // ── Mundo (escala 2x, pixel art) ──
     ctx.save();
     ctx.imageSmoothingEnabled = false;
     ctx.scale(WORLD_SCALE, WORLD_SCALE);
     camera.apply(ctx);
-
     if (gameMap) gameMap.draw(ctx);
-
     const renderQueue = interactables.filter(o => o.draw);
     if (alex) renderQueue.push(alex);
     renderQueue.sort((a, b) => (a.y + (a.height || 0)) - (b.y + (b.height || 0)));
     for (const entity of renderQueue) entity.draw(ctx);
-
     if (debugMode && gameMap) drawDebugOverlay();
-
     camera.restore(ctx);
     ctx.restore();
-
-    // ── UI (alta resolução) ──
     if (dialogueBox)  dialogueBox.draw();
     if (tutorial)     tutorial.draw();
     if (infoPanel)    infoPanel.draw();
@@ -1556,18 +1304,14 @@ function draw() {
     drawControlsHint();
     sceneManager.draw();
 }
-
-/** Dica discreta e permanente (canto inferior esquerdo) lembrando da tecla de ajuda. */
 function drawControlsHint() {
     if (dialogueBox.active || puzzleUI.active || journal.active ||
         endingScreen.active || controlsScreen.active || (tutorial && tutorial.active)) return;
-
     ctx.fillStyle = 'rgba(245, 240, 232, 0.45)';
     ctx.font = font(TYPE.caption);
     ctx.textAlign = 'left';
     ctx.fillText('H: controles', SPACE.sm, canvas.height - SPACE.sm);
 }
-
 function drawDebugOverlay() {
     gameMap.drawCollisionDebug(ctx);
     ctx.strokeStyle = 'rgba(0,255,0,0.9)';
@@ -1582,24 +1326,17 @@ function drawDebugOverlay() {
         ctx.strokeRect(b.x, b.y, b.width, b.height);
     }
 }
-
-// ═══════════════════════════════════════════════════════════════
-// PORTAL DINÂMICO DO TEMPLO
-// ═══════════════════════════════════════════════════════════════
 function checkSpawnTemploPortal() {
     if (!gameMap) return;
     if (!['vila_rica', 'rio_de_janeiro', 'sao_paulo'].includes(gameState.currentPhase)) return;
     if (!gameState.hasAllInfos()) return;
     if (interactables.some(item => item.name === 'Portal Templo')) return;
-
     console.log('✨ Todos os fatos coletados! Abrindo portal para o Templo.');
     audio.playSfx('sfx_portal');
-
     const portalObj = gameMap.mapObjects.find(o => o.name === 'volta_templo');
     const px = portalObj ? portalObj.x : gameMap.spawnPoint.x;
     const py = portalObj ? portalObj.y : (gameState.currentPhase === 'vila_rica'
         ? gameMap.spawnPoint.y - 5 : gameMap.spawnPoint.y + 40);
-
     interactables.push(new Interactable(px, py, {
         name: 'Portal Templo',
         width: portalObj ? portalObj.width : 30,
@@ -1611,10 +1348,6 @@ function checkSpawnTemploPortal() {
         onInteractComplete: () => loadScene('templo'),
     }));
 }
-
-// ═══════════════════════════════════════════════════════════════
-// HOOK DE DEPURAÇÃO / TESTES (não interfere no jogo normal)
-// ═══════════════════════════════════════════════════════════════
 window.__ecosDebug = {
     loadScene,
     get gameState() { return gameState; },
@@ -1632,6 +1365,4 @@ window.__ecosDebug = {
     SCENES,
     ACTS,
 };
-
-// ═══════════════════════════════════════════════════════════════
 init();

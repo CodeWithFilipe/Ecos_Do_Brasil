@@ -2,28 +2,9 @@
 // Fonte da verdade: pasta src/. Para regenerar: python3 scratch/build_bundle.py .
 (() => {
 "use strict";
-// ═══════ src/ui/theme.js ═══════
-/**
- * theme.js — Design tokens centrais da interface.
- *
- * Toda a UI consome estes tokens; nenhum componente deve
- * declarar cores/fontes/medidas próprias ("magic numbers").
- *
- * O mundo do jogo é renderizado em 320x240 (VIEW) e ampliado 2x
- * para o canvas físico de 640x480 (SCREEN). A UI desenha direto
- * no espaço SCREEN, em alta resolução — texto nítido.
- */
-
-/** Resolução lógica do mundo (câmera). */
 const VIEW = Object.freeze({ W: 320, H: 240 });
-
-/** Fator de ampliação do mundo para o canvas físico. */
 const WORLD_SCALE = 2;
-
-/** Resolução física do canvas (UI desenha neste espaço). */
 const SCREEN = Object.freeze({ W: VIEW.W * WORLD_SCALE, H: VIEW.H * WORLD_SCALE });
-
-/** Paleta da interface. */
 const COLORS = Object.freeze({
     gold        : '#EF9F27',
     goldSoft    : 'rgba(239, 159, 39, 0.25)',
@@ -42,24 +23,14 @@ const COLORS = Object.freeze({
     neutral     : '#757575',
     highlight   : '#FFD700',
 });
-
-/** Famílias tipográficas (fallbacks seguros do Windows/navegador). */
 const SANS = "'Segoe UI', 'Trebuchet MS', Verdana, sans-serif";
 const MONO = "Consolas, 'Courier New', monospace";
-
-/**
- * Monta uma string de fonte para o canvas.
- * @param {number} px — tamanho em pixels do espaço SCREEN
- * @param {{bold?: boolean, italic?: boolean, mono?: boolean}} [opts]
- */
 function font(px, opts = {}) {
     const style  = opts.italic ? 'italic ' : '';
     const weight = opts.bold ? 'bold ' : '';
     const family = opts.mono ? MONO : SANS;
     return `${style}${weight}${px}px ${family}`;
 }
-
-/** Escala de tipos padronizada (px no espaço SCREEN). */
 const TYPE = Object.freeze({
     caption : 13,
     body    : 16,
@@ -67,15 +38,7 @@ const TYPE = Object.freeze({
     title   : 22,
     hero    : 30,
 });
-
-/** Espaçamentos padronizados. */
 const SPACE = Object.freeze({ xs: 4, sm: 8, md: 16, lg: 24, xl: 40 });
-
-/**
- * Quebra `text` em linhas que caibam em `maxWidth` com a fonte atual do ctx.
- * Utilidade compartilhada por toda a UI (evita implementações duplicadas).
- * @returns {string[]}
- */
 function wrapLines(ctx, text, maxWidth) {
     const words = String(text ?? '').split(' ');
     const lines = [];
@@ -92,8 +55,6 @@ function wrapLines(ctx, text, maxWidth) {
     lines.push(line);
     return lines;
 }
-
-/** Desenha linhas já quebradas; retorna o y da linha seguinte. */
 function drawLines(ctx, lines, x, y, lineHeight) {
     for (const line of lines) {
         ctx.fillText(line, x, y);
@@ -101,17 +62,13 @@ function drawLines(ctx, lines, x, y, lineHeight) {
     }
     return y;
 }
-
-// ═══════ src/core/Input.js ═══════
 class Input {
     constructor() {
         this.keys = {};
-        // Teclas do jogo que devem ser bloqueadas de comportamento padrão
         const gameKeys = new Set([
             'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
             'Space', 'KeyE', 'KeyW', 'KeyA', 'KeyS', 'KeyD'
         ]);
-
         window.addEventListener('keydown', (e) => {
             this.keys[e.code] = true;
             if (gameKeys.has(e.code)) e.preventDefault();
@@ -121,123 +78,50 @@ class Input {
             if (gameKeys.has(e.code)) e.preventDefault();
         });
     }
-
     isDown(keyCode) {
         return this.keys[keyCode] === true;
     }
 }
-// ═══════ src/core/Camera.js ═══════
 class Camera {
     constructor(canvasWidth, canvasHeight) {
         this.x = 0;
         this.y = 0;
         this.width = canvasWidth;
         this.height = canvasHeight;
-
-        // Limites do mapa (serão definidos quando o mapa carregar)
         this.mapWidth = canvasWidth;
         this.mapHeight = canvasHeight;
-
-        // Suavização do movimento da câmera
-        this.smoothSpeed = 5; // Quanto maior, mais rápido segue
+        this.smoothSpeed = 5; 
     }
-
-    /**
-     * Define os limites do mapa para a câmera não mostrar além das bordas.
-     */
     setBounds(mapWidth, mapHeight) {
         this.mapWidth = mapWidth;
         this.mapHeight = mapHeight;
     }
-
-    /**
-     * Atualiza a posição da câmera para seguir um alvo (o jogador).
-     * Usa interpolação linear (lerp) para movimento suave.
-     */
     update(dt, target) {
-        // Posição desejada: centralizar o alvo na tela
         const targetX = target.x + target.width / 2 - this.width / 2;
         const targetY = target.y + target.height / 2 - this.height / 2;
-
-        // Interpolação suave (lerp)
         const t = 1 - Math.pow(0.001, dt * this.smoothSpeed);
         this.x += (targetX - this.x) * t;
         this.y += (targetY - this.y) * t;
-
-        // Limitar aos bounds do mapa
         this.x = Math.max(0, Math.min(this.x, this.mapWidth - this.width));
         this.y = Math.max(0, Math.min(this.y, this.mapHeight - this.height));
     }
-
-    /**
-     * Aplica a transformação da câmera no contexto de renderização.
-     * Chamar antes de desenhar qualquer coisa do mundo.
-     */
     apply(ctx) {
         ctx.save();
         ctx.translate(-Math.round(this.x), -Math.round(this.y));
     }
-
-    /**
-     * Remove a transformação da câmera.
-     * Chamar após desenhar o mundo, antes de desenhar a UI.
-     */
     restore(ctx) {
         ctx.restore();
     }
 }
-
-// ═══════ src/world/Collision.js ═══════
-/**
- * Collision — utilitários centralizados de colisão física (AABB) do mundo.
- *
- * Fonte única de verdade para:
- *  - Quais nomes de camada (objectgroup) de um .tmj contam como colisão física
- *  - O teste de sobreposição retângulo-retângulo usado por Map e pelas entidades
- *
- * Mantém a lógica de colisão consistente entre mapas, em vez de cada arquivo
- * reimplementar sua própria variação da mesma checagem.
- */
-
-/** Nomes de camada reconhecidos como colisão física nos .tmj (case-insensitive). */
 const COLLISION_LAYER_NAMES = new Set(['colisões', 'colisoes']);
-
-/** @param {string} name — nome da camada (objectgroup) do .tmj */
 function isCollisionLayerName(name) {
     return COLLISION_LAYER_NAMES.has(name.toLowerCase());
 }
-
-/**
- * Sobreposição entre dois retângulos {x, y, width, height} (AABB).
- * Único ponto de verdade para esse teste — usado tanto pela colisão
- * contra o mapa (Map.isColliding) quanto contra NPCs (Player).
- */
 function rectsOverlap(a, b) {
     return a.x < b.x + b.width  && a.x + a.width  > b.x &&
            a.y < b.y + b.height && a.y + a.height > b.y;
 }
 
-// ═══════ src/world/Map.js ═══════
-
-/**
- * Map — Renderizador e gerenciador de colisão para mapas Tiled (.tmj)
- *
- * Suporta:
- *  - Múltiplos tilesets (embedded e externos)
- *  - Tiles de tamanho diferente entre tilesets
- *  - Flags de flip do Tiled
- *  - Camada "Colisões"/"colisoes" com retângulos, polígonos e polylines
- *  - Busca spawn_player em TODAS as objectgroup layers
- *  - Objetos nomeados (portais, itens, NPCs)
- *  - Tiles marcados com a propriedade custom "solid" (no Tiled: aba
- *    "Tile Properties" do tileset) geram colisão automaticamente na
- *    posição exata onde aparecem — sem precisar de um retângulo manual
- *    duplicado na camada de colisões. Isso evita hitboxes desalinhadas
- *    do sprite real sempre que um objeto decorativo é movido/editado.
- *
- * A lógica de colisão (nomes de camada aceitos, teste de sobreposição) vive
- * em Collision.js — fonte única de verdade compartilhada com as entidades.
- */
 class Map {
     constructor(mapData, imageRegistry = {}) {
         this.mapData    = mapData;
@@ -245,20 +129,15 @@ class Map {
         this.tileHeight = mapData.tileheight;
         this.widthPx    = mapData.width  * this.tileWidth;
         this.heightPx   = mapData.height * this.tileHeight;
-
         this.tilesets          = [];
         this.collisionRects    = [];
         this.collisionPolygons = [];
         this.spawnPoint        = { x: this.widthPx / 2, y: this.heightPx / 2 };
         this.mapObjects        = [];
-
         this._buildTilesets(imageRegistry);
         this._buildTileCollisions();
         this._parseAllObjectLayers();
     }
-
-    // ── TILESETS ─────────────────────────────────
-
     _buildTilesets(registry) {
         for (const ts of this.mapData.tilesets) {
             const entry = {
@@ -272,9 +151,7 @@ class Map {
                 spacing  : ts.spacing    || 0,
                 solidLocalIds: this._readSolidLocalIds(ts),
             };
-
             if (ts.image) {
-                // Embedded: dados completos no TMJ
                 entry.columns   = ts.columns;
                 entry.tilecount = ts.tilecount;
                 entry.tileW     = ts.tilewidth  || this.tileWidth;
@@ -282,32 +159,24 @@ class Map {
                 const imgBase = this._stem(ts.image);
                 entry.image = registry[imgBase] || null;
                 if (!entry.image) console.warn(`[Map] Tileset embedded sem imagem: ${ts.image} (key: ${imgBase})`);
-
             } else if (ts.source) {
-                // Externo (.tsx): casar pelo stem do source
                 const srcStem = this._stem(ts.source);
                 entry.image = registry[srcStem] || null;
                 if (!entry.image) console.warn(`[Map] Tileset externo sem imagem: ${ts.source} (key: ${srcStem})`);
             }
-
             this.tilesets.push(entry);
         }
-
         this.tilesets.sort((a, b) => b.firstgid - a.firstgid);
     }
-
     _stem(path) {
         return path.split('/').pop().split('\\').pop().replace(/\.[^.]+$/, '');
     }
-
     _tilesetFor(gid) {
         for (const ts of this.tilesets) {
             if (gid >= ts.firstgid) return ts;
         }
         return null;
     }
-
-    /** IDs locais (dentro do tileset) marcados com a propriedade custom "solid":true no Tiled. */
     _readSolidLocalIds(ts) {
         const ids = new Set();
         for (const tileDef of ts.tiles || []) {
@@ -316,24 +185,14 @@ class Map {
         }
         return ids;
     }
-
-    /**
-     * Gera colisão automaticamente para todo tile marcado como "solid",
-     * exatamente na célula onde ele é desenhado (mesma conta de dx/dy do
-     * draw()). Assim a hitbox nunca fica dessincronizada do sprite real:
-     * mover o tile no editor move a colisão junto, sem retângulo manual.
-     */
     _buildTileCollisions() {
         for (const layer of this.mapData.layers) {
             if (layer.type !== 'tilelayer') continue;
-
             for (let i = 0; i < layer.data.length; i++) {
                 const gid = layer.data[i] & 0x0FFFFFFF;
                 if (!gid) continue;
-
                 const ts = this._tilesetFor(gid);
                 if (!ts || !ts.solidLocalIds.has(gid - ts.firstgid)) continue;
-
                 this.collisionRects.push({
                     x: (i % layer.width)           * this.tileWidth,
                     y: Math.floor(i / layer.width) * this.tileHeight,
@@ -343,30 +202,19 @@ class Map {
             }
         }
     }
-
-    // ── PARSE ALL OBJECT LAYERS ──────────────────
-    // Busca spawn, colisões e objetos em TODAS as objectgroup layers
-
     _parseAllObjectLayers() {
         let foundSpawn = false;
-
         for (const layer of this.mapData.layers) {
             if (layer.type !== 'objectgroup') continue;
-
             const isCollisionLayer = isCollisionLayerName(layer.name);
-
             for (const obj of layer.objects) {
-                // Spawn — procurar em QUALQUER objectgroup
                 if (obj.name === 'spawn_player' && !foundSpawn) {
                     this.spawnPoint = { x: obj.x, y: obj.y };
                     foundSpawn = true;
                     continue;
                 }
-
-                // Colisões
                 if (isCollisionLayer) {
-                    if (obj.name === 'spawn_player') continue; // spawn no layer de colisão (templo)
-
+                    if (obj.name === 'spawn_player') continue; 
                     if (obj.polygon) {
                         this.collisionPolygons.push(
                             obj.polygon.map(p => ({ x: obj.x + p.x, y: obj.y + p.y }))
@@ -383,8 +231,6 @@ class Map {
                     }
                     continue;
                 }
-
-                // Objetos nomeados (portais, itens, NPCs)
                 if (obj.name && obj.name !== 'spawn_player' && obj.width > 0 && obj.height > 0) {
                     this.mapObjects.push({
                         name  : obj.name,
@@ -397,21 +243,14 @@ class Map {
             }
         }
     }
-
-    // ── COLISÃO ──────────────────────────────────
-
     isColliding(x, y, w, h) {
-        // Margem de tolerância na borda do mapa: meio tile, para não variar
-        // conforme o tamanho de tile de cada mapa (16px vs 32px etc.).
         const margin = Math.min(this.tileWidth, this.tileHeight) / 2;
         if (x < -margin || y < -margin ||
             x + w > this.widthPx + margin || y + h > this.heightPx + margin) return true;
-
         const box = { x, y, width: w, height: h };
         for (const r of this.collisionRects) {
             if (rectsOverlap(box, r)) return true;
         }
-
         const pts = [
             { x, y }, { x: x+w, y }, { x, y: y+h }, { x: x+w, y: y+h },
             { x: x + w/2, y: y + h/2 }
@@ -421,10 +260,8 @@ class Map {
                 if (this._pointInPoly(p.x, p.y, poly)) return true;
             }
         }
-
         return false;
     }
-
     _pointInPoly(px, py, poly) {
         let inside = false;
         const n = poly.length;
@@ -438,38 +275,27 @@ class Map {
         }
         return inside;
     }
-
-    // ── RENDERIZAÇÃO ─────────────────────────────
-
     draw(ctx) {
         const FLIP_H = 0x80000000;
         const FLIP_V = 0x40000000;
         const FLIP_D = 0x20000000;
-
         for (const layer of this.mapData.layers) {
             if (layer.type !== 'tilelayer' || layer.visible === false) continue;
-
             for (let i = 0; i < layer.data.length; i++) {
                 const raw = layer.data[i];
                 if (!raw) continue;
-
                 const flipH = (raw & FLIP_H) !== 0;
                 const flipV = (raw & FLIP_V) !== 0;
-                const gid   = (raw & 0x0FFFFFFF); // Limpa as flags de rotação
-
+                const gid   = (raw & 0x0FFFFFFF); 
                 const ts = this._tilesetFor(gid);
                 if (!ts || !ts.image || !ts.image.complete || !ts.image.naturalWidth) continue;
-
                 const localId = gid - ts.firstgid;
                 const cols    = ts.columns || Math.floor((ts.image.width - ts.margin * 2 + ts.spacing) / (ts.tileW + ts.spacing));
                 if (cols <= 0) continue;
-
                 const sx = ts.margin + (localId % cols) * (ts.tileW + ts.spacing);
                 const sy = ts.margin + Math.floor(localId / cols) * (ts.tileH + ts.spacing);
-
                 const dx = (i % layer.width)           * this.tileWidth;
                 const dy = Math.floor(i / layer.width) * this.tileHeight;
-
                 if (flipH || flipV) {
                     ctx.save();
                     ctx.translate(dx + this.tileWidth / 2, dy + this.tileHeight / 2);
@@ -487,7 +313,6 @@ class Map {
             }
         }
     }
-
     drawCollisionDebug(ctx) {
         ctx.strokeStyle = 'rgba(255,0,0,0.6)';
         ctx.fillStyle   = 'rgba(255,0,0,0.12)';
@@ -506,45 +331,23 @@ class Map {
         }
     }
 }
-// ═══════ src/core/SceneManager.js ═══════
 
-/**
- * SceneManager — gerencia transições entre cenas/mapas.
- *
- * Cada cena é definida por:
- *  {
- *    mapFile    : 'assets/maps/praca.tmj',
- *    tilesets   : { stemName: imageElement, ... },
- *    onLoad     : (map, player) => void   // posicionar jogador, criar NPCs, etc.
- *  }
- */
 class SceneManager {
     constructor(canvas, ctx) {
         this.canvas = canvas;
         this.ctx    = ctx;
-
-        // Estado de fade
         this.fadeAlpha   = 0;
         this.fadingOut   = false;
         this.fadingIn    = false;
-        this.fadeSpeed   = 2.2;        // alpha/s
+        this.fadeSpeed   = 2.2;        
         this.fadeColor   = '#000';
-        this._pendingLoad = null;       // função chamada no pico do fade
-
+        this._pendingLoad = null;       
         this.currentScene = null;
-        this.currentMap   = null;      // instância de Map atual
+        this.currentMap   = null;      
     }
-
     get transitioning() {
         return this.fadingOut || this.fadingIn;
     }
-
-    /**
-     * Inicia uma transição para outra cena.
-     * @param {Function} midCallback — chamado no meio do fade (tela preta).
-     *   Deve fazer: carregar mapa, reposicionar jogador, recriar NPCs.
-     *   Pode ser async.
-     */
     transitionTo(sceneName, midCallback) {
         if (this.transitioning) return;
         this.currentScene = sceneName;
@@ -553,7 +356,6 @@ class SceneManager {
         this._pendingLoad = midCallback;
         this._midDone     = false;
     }
-
     update(dt) {
         if (this.fadingOut) {
             this.fadeAlpha += this.fadeSpeed * dt;
@@ -563,7 +365,6 @@ class SceneManager {
                 if (!this._midDone) {
                     this._midDone = true;
                     const result = this._pendingLoad?.();
-                    // suporte a callback async
                     if (result && typeof result.then === 'function') {
                         result.then(() => { this.fadingIn = true; });
                     } else {
@@ -579,7 +380,6 @@ class SceneManager {
             }
         }
     }
-
     draw() {
         if (this.fadeAlpha <= 0) return;
         this.ctx.fillStyle   = this.fadeColor;
@@ -588,72 +388,36 @@ class SceneManager {
         this.ctx.globalAlpha = 1;
     }
 }
-
-// ═══════ src/core/GameState.js ═══════
-/**
- * GameState — estado global do jogo (fonte única de verdade).
- *
- * Responsabilidades:
- *  - Progresso da aventura (ato, fase, flags de história)
- *  - Coleção de informações históricas (por ato, com arquivo permanente)
- *  - Verificação dos puzzles de cada ato
- *
- * Convenções:
- *  - "Ato" 1..3 = Vila Rica, Rio de Janeiro, São Paulo.
- *  - collectedInfos NUNCA é limpo ao concluir um ato: os registros das
- *    fases concluídas permanecem para consulta no diário (com selo
- *    FATO/BOATO revelado). Consultas de progresso são sempre por ato.
- */
 class GameState {
-
-    /** Fase (chave de INFO_DATA) de cada ato. */
     static PHASE_BY_ACT = Object.freeze({ 1: 'vila_rica', 2: 'rio_de_janeiro', 3: 'sao_paulo' });
-
-    /** Quantidade de informações necessárias por ato. */
     static REQUIRED_BY_ACT = Object.freeze({ 1: 4, 2: 6, 3: 8 });
-
-    /** Par (início, fim) correto do puzzle de cada ato. */
     static PUZZLE_ANSWER_BY_ACT = Object.freeze({
         1: { start: 'derrama',         end: 'traicao' },
         2: { start: 'republica_inicio', end: 'republica_fim' },
         3: { start: 'leiaurea_inicio',  end: 'leiaurea_fim' },
     });
-
     constructor() {
         this.reset();
     }
-
     reset() {
         this.act               = 1;
-        this.completedActs     = [];      // atos com puzzle vencido (diário revela selos)
+        this.completedActs     = [];      
         this.currentPhase      = 'biblioteca';
-        this.tutorialStep      = 0;       // 0=mover, 1=interagir, 2=professora, 3=done
+        this.tutorialStep      = 0;       
         this.talkedToTeacher   = false;
         this.talkedToLibrarian = false;
         this.bookFound         = false;
         this.arasyMet          = false;
-        this.collectedInfos    = [];      // acumula TODOS os atos (diário)
+        this.collectedInfos    = [];      
         this.puzzleAttempts    = 0;
         this.gameWon           = false;
     }
-
-    // ── Tutorial ─────────────────────────────────────────────
-
     advanceTutorial() {
         this.tutorialStep = Math.min(this.tutorialStep + 1, 4);
     }
-
     isTutorialDone() {
         return this.tutorialStep >= 3;
     }
-
-    // ── Atos ─────────────────────────────────────────────────
-
-    /**
-     * Descobre a qual ato uma informação pertence, pela fonte canônica.
-     * @param {{id: string}} info
-     * @returns {1|2|3|null}
-     */
     getInfoAct(info) {
         if (!info) return null;
         for (const [act, phase] of Object.entries(GameState.PHASE_BY_ACT)) {
@@ -661,65 +425,35 @@ class GameState {
         }
         return null;
     }
-
-    /** @param {number} act */
     isActCompleted(act) {
         return this.completedActs.includes(act);
     }
-
-    /** Marca o ato atual como concluído (idempotente). */
     completeCurrentAct() {
         if (!this.isActCompleted(this.act)) this.completedActs.push(this.act);
     }
-
-    // ── Informações coletáveis ───────────────────────────────
-
-    /**
-     * Registra uma informação coletada.
-     * @param {Object} info — item de INFO_DATA
-     * @returns {boolean} true se era inédita
-     */
     addInfo(info) {
         if (this.hasInfo(info.id)) return false;
         this.collectedInfos.push(info);
         return true;
     }
-
     hasInfo(id) {
         return this.collectedInfos.some(i => i.id === id);
     }
-
-    /** Informações coletadas pertencentes ao ato ATUAL. */
     getCurrentActInfos() {
         return this.collectedInfos.filter(i => this.getInfoAct(i) === this.act);
     }
-
-    /** Contagem do ato atual (HUD, portal, puzzle). */
     getInfoCount() {
         return this.getCurrentActInfos().length;
     }
-
     getRequiredInfoCount() {
         return GameState.REQUIRED_BY_ACT[this.act] ?? 4;
     }
-
     hasAllInfos() {
         return this.getInfoCount() >= this.getRequiredInfoCount();
     }
-
-    /** Remove apenas as informações do ato atual (derrota no puzzle). */
     clearCurrentActInfos() {
         this.collectedInfos = this.collectedInfos.filter(i => this.getInfoAct(i) !== this.act);
     }
-
-    // ── Puzzle ───────────────────────────────────────────────
-
-    /**
-     * Confere a resposta do puzzle do ato atual.
-     * @param {string} startId
-     * @param {string} endId
-     * @returns {boolean}
-     */
     checkPuzzle(startId, endId) {
         this.puzzleAttempts++;
         const answer = GameState.PUZZLE_ANSWER_BY_ACT[this.act];
@@ -727,8 +461,6 @@ class GameState {
         if (correct && this.act === 3) this.gameWon = true;
         return correct;
     }
-
-    // ── Dados canônicos das informações por fase ─────────────
     static INFO_DATA = {
         vila_rica: [
             {
@@ -901,30 +633,13 @@ class GameState {
     };
 }
 
-// ═══════ src/core/SaveSystem.js ═══════
-
-/**
- * SaveSystem — salvamento automático em localStorage.
- *
- * Regras de segurança:
- *  - Todo acesso a localStorage e JSON.parse é envolvido em try/catch.
- *  - Save corrompido, de versão diferente ou com dados inválidos é DESCARTADO
- *    silenciosamente (o jogo inicia do zero, nunca trava).
- *  - collectedInfos são salvos apenas como IDs e re-hidratados a partir de
- *    GameState.INFO_DATA (fonte canônica); IDs desconhecidos são ignorados.
- */
 const SAVE_KEY = 'ecos_do_brasil_save';
 const SAVE_VERSION = 1;
-
-// Cenas válidas para respawn (deve espelhar as chaves de SCENES no main.js)
 const VALID_SCENES = [
     'biblioteca', 'templo', 'vila_rica', 'cambio', 'igreja', 'taverna',
     'rio_de_janeiro', 'sao_paulo', 'vitoria'
 ];
-
-// Cenas interiores de Vila Rica: respawn seguro é a própria praça
 const SCENE_REDIRECT = { cambio: 'vila_rica', igreja: 'vila_rica', taverna: 'vila_rica', vitoria: 'biblioteca' };
-
 function storageAvailable() {
     try {
         const t = '__ecos_test__';
@@ -935,16 +650,8 @@ function storageAvailable() {
         return false;
     }
 }
-
 const SaveSystem = {
-
     enabled: storageAvailable(),
-
-    /**
-     * Salva o estado atual. Nunca lança exceção.
-     * @param {GameState} gameState
-     * @param {string} sceneName — cena atual
-     */
     save(gameState, sceneName) {
         if (!this.enabled) return false;
         try {
@@ -973,33 +680,21 @@ const SaveSystem = {
             return false;
         }
     },
-
-    /**
-     * Carrega e valida o save. Retorna null se não existir ou for inválido.
-     * @returns {{scene: string, state: Object} | null}
-     */
     load() {
         if (!this.enabled) return null;
         try {
             const raw = localStorage.getItem(SAVE_KEY);
             if (!raw) return null;
-
             const data = JSON.parse(raw);
-
-            // Validação estrutural — qualquer inconsistência descarta o save
             if (!data || typeof data !== 'object')        return this._discard('formato');
             if (data.version !== SAVE_VERSION)            return this._discard('versão');
             if (!data.state || typeof data.state !== 'object') return this._discard('estado');
             if (typeof data.scene !== 'string')           return this._discard('cena');
             if (!VALID_SCENES.includes(data.scene))       return this._discard('cena inválida');
-
             const s = data.state;
             if (![1, 2, 3].includes(s.act))               return this._discard('ato');
             if (!Array.isArray(s.infoIds))                return this._discard('infos');
-
-            // Redireciona cenas de interior para o hub correspondente
             const scene = SCENE_REDIRECT[data.scene] || data.scene;
-
             return { scene, state: s, savedAt: data.savedAt };
         } catch (err) {
             console.warn('💾 Save corrompido, descartado:', err);
@@ -1007,12 +702,6 @@ const SaveSystem = {
             return null;
         }
     },
-
-    /**
-     * Aplica um save validado ao GameState.
-     * @param {GameState} gameState
-     * @param {Object} state — objeto `state` retornado por load()
-     */
     applyTo(gameState, state) {
         gameState.reset();
         gameState.act               = state.act;
@@ -1025,8 +714,6 @@ const SaveSystem = {
         gameState.arasyMet          = !!(state.arasyMet ?? state.clioMet);
         gameState.puzzleAttempts    = Number.isInteger(state.puzzleAttempts) ? state.puzzleAttempts : 0;
         gameState.gameWon           = !!state.gameWon;
-
-        // Re-hidrata infos a partir da fonte canônica (IDs desconhecidos ignorados)
         const allInfos = [
             ...GameState.INFO_DATA.vila_rica,
             ...GameState.INFO_DATA.rio_de_janeiro,
@@ -1036,32 +723,17 @@ const SaveSystem = {
             .map(id => allInfos.find(i => i.id === id))
             .filter(Boolean);
     },
-
     clear() {
         if (!this.enabled) return;
-        try { localStorage.removeItem(SAVE_KEY); } catch (_) { /* noop */ }
+        try { localStorage.removeItem(SAVE_KEY); } catch (_) {  }
     },
-
     _discard(reason) {
         console.warn(`💾 Save descartado (${reason} incompatível). Iniciando novo jogo.`);
         this.clear();
         return null;
     }
 };
-
-// ═══════ src/core/AudioManager.js ═══════
-/**
- * AudioManager — música de fundo + efeitos sonoros.
- *
- * Regras de segurança:
- *  - Autoplay: navegadores bloqueiam áudio antes do primeiro gesto do usuário.
- *    unlock() é chamado no primeiro keydown; até lá a música fica pendente.
- *  - Arquivo faltando/corrompido: warning único no console, jogo segue mudo.
- *  - Todo play() tem .catch — nenhuma falha de áudio interrompe o jogo.
- *  - Mute (tecla M) persistido em localStorage.
- */
 const MUTE_KEY = 'ecos_do_brasil_muted';
-
 const TRACKS = {
     musica_biblioteca : './assets/audio/musica_biblioteca.mp3',
     musica_templo     : './assets/audio/musica_templo.mp3',
@@ -1075,27 +747,23 @@ const TRACKS = {
     sfx_portal        : './assets/audio/sfx_portal.mp3',
     sfx_error         : './assets/audio/sfx_error.mp3',
 };
-
 const MUSIC_VOLUME = 0.55;
 const SFX_VOLUME   = 0.7;
 const FADE_MS      = 600;
-
 class AudioManager {
     constructor() {
         this.unlocked     = false;
         this.pendingMusic = null;
-        this.current      = null;   // { name, el }
+        this.current      = null;   
         this.broken       = new Set();
         this.elements     = {};
         this._fadeTimer   = null;
-
         try {
             this.muted = localStorage.getItem(MUTE_KEY) === '1';
         } catch (_) {
             this.muted = false;
         }
     }
-
     _get(name) {
         if (this.broken.has(name)) return null;
         if (!TRACKS[name]) { console.warn(`🔇 Faixa desconhecida: ${name}`); return null; }
@@ -1117,8 +785,6 @@ class AudioManager {
         }
         return this.elements[name];
     }
-
-    /** Chamado no primeiro gesto do usuário (keydown). */
     unlock() {
         if (this.unlocked) return;
         this.unlocked = true;
@@ -1128,28 +794,21 @@ class AudioManager {
             this.playMusic(name);
         }
     }
-
-    /** Toca música em loop, com crossfade se já houver outra tocando. */
     playMusic(name) {
         if (!name) return;
         if (!this.unlocked) { this.pendingMusic = name; return; }
         if (this.current && this.current.name === name) return;
-
         const el = this._get(name);
-
-        // Fade-out da faixa atual (mesmo que a nova tenha falhado)
         const old = this.current;
         this.current = el ? { name, el } : null;
         if (this._fadeTimer) { clearInterval(this._fadeTimer); this._fadeTimer = null; }
-
         if (el) {
             el.loop = true;
             el.volume = 0;
             el.currentTime = 0;
             el.muted = this.muted;
-            el.play().catch(() => { /* autoplay bloqueado ou arquivo ruim — segue mudo */ });
+            el.play().catch(() => {  });
         }
-
         const steps = 12;
         let step = 0;
         this._fadeTimer = setInterval(() => {
@@ -1158,7 +817,7 @@ class AudioManager {
             try {
                 if (old && old.el) old.el.volume = Math.max(0, MUSIC_VOLUME * (1 - t));
                 if (el) el.volume = Math.min(MUSIC_VOLUME, MUSIC_VOLUME * t);
-            } catch (_) { /* noop */ }
+            } catch (_) {  }
             if (step >= steps) {
                 clearInterval(this._fadeTimer);
                 this._fadeTimer = null;
@@ -1166,8 +825,6 @@ class AudioManager {
             }
         }, FADE_MS / steps);
     }
-
-    /** Toca um efeito sonoro curto (pode sobrepor). */
     playSfx(name) {
         if (!this.unlocked || this.muted) return;
         const el = this._get(name);
@@ -1175,10 +832,9 @@ class AudioManager {
         try {
             const clone = el.cloneNode();
             clone.volume = SFX_VOLUME;
-            clone.play().catch(() => { /* noop */ });
-        } catch (_) { /* noop */ }
+            clone.play().catch(() => {  });
+        } catch (_) {  }
     }
-
     toggleMute() {
         this.muted = !this.muted;
         if (this.current && this.current.el) {
@@ -1189,24 +845,8 @@ class AudioManager {
         return this.muted;
     }
 }
-
-// ═══════ src/entities/NPC.js ═══════
-/**
- * NPC — Personagem não-jogável.
- *
- * Suporta:
- *  - Spritesheet (se fornecida)
- *  - Fallback visual: silhueta pixelart colorida com nome
- *  - infoData: ao interagir, registra informação no GameState
- *  - hasSpoken: muda diálogo após primeira interação
- */
 class NPC {
-    /**
-     * Fator visual padrão dos NPCs adultos (maior que o protagonista-criança).
-     * Ver regra de escala em CLAUDE.md. Não afeta hitbox/colisão — apenas o desenho.
-     */
     static DEFAULT_RENDER_SCALE = 1.5;
-
     constructor(x, y, config = {}) {
         this.x = x;
         this.y = y;
@@ -1215,33 +855,22 @@ class NPC {
         this.name   = config.name   || 'NPC';
         this.color  = config.color  || '#787880';
         this.accentColor = config.accentColor || '#aaa';
-
-        // Escala visual (não altera hitbox/colisão, só o desenho — NPCs adultos > Alex)
         this.renderScale = config.renderScale ?? NPC.DEFAULT_RENDER_SCALE;
-
-        // Sprite (opcional)
         this.spriteSheet  = config.spriteSheet || null;
         this.frameW       = config.frameW    || 32;
         this.frameH       = config.frameH    || 32;
         this.facing       = config.facing    || 0;
         this.maxFrames    = config.maxFrames || 2;
-        this.frameOffsetX = config.frameOffsetX || 0; // Coluna inicial da animação no sheet
-
-        // Animação
+        this.frameOffsetX = config.frameOffsetX || 0; 
         this.animFrame = 0;
         this.animTimer = 0;
         this.animSpeed = 0.5;
-
-        // Diálogos
         this.dialogueLines      = config.dialogueLines || [{ speaker: this.name, text: '...' }];
         this.afterDialogueLines = config.afterDialogueLines || null;
         this.onInteractComplete = config.onInteractComplete || null;
         this.hasSpoken          = false;
-
-        // Informação coletável (para Vila Rica)
         this.infoData = config.infoData || null;
     }
-
     update(dt) {
         this.animTimer += dt;
         if (this.animTimer >= this.animSpeed) {
@@ -1249,7 +878,6 @@ class NPC {
             this.animTimer -= this.animSpeed;
         }
     }
-
     getDialogue() {
         let lines;
         if (this.hasSpoken && this.afterDialogueLines) {
@@ -1257,45 +885,32 @@ class NPC {
         } else {
             lines = this.dialogueLines;
         }
-
         const callback = () => {
             if (!this.hasSpoken) {
                 this.hasSpoken = true;
                 if (this.onInteractComplete) this.onInteractComplete();
             }
         };
-
         return { lines, callback };
     }
-
-    /** Altura extra (px) que o desenho ganha acima de this.y por causa do renderScale. */
     _visualTopOffset() {
         return (this.height * this.renderScale - this.height);
     }
-
     draw(ctx) {
         if (this.spriteSheet && this.spriteSheet.complete) {
             const sx = (this.frameOffsetX + this.animFrame) * this.frameW;
             const sy = this.facing * this.frameH;
-
-            // Sombra nos pés (tamanho ligado à hitbox, não à escala visual)
             ctx.fillStyle = 'rgba(0,0,0,0.22)';
             ctx.beginPath();
             ctx.ellipse(this.x + this.width / 2, this.y + this.height - 1, this.width / 2.4, 2, 0, 0, Math.PI * 2);
             ctx.fill();
-
-            // Desenho maior que a hitbox, ancorado nos pés (this.x/this.y/this.width/this.height
-            // continuam sendo a hitbox real usada pela colisão — só o retângulo de destino cresce).
             const drawW = this.width  * this.renderScale;
             const drawH = this.height * this.renderScale;
             const drawX = this.x + (this.width  - drawW) / 2;
             const drawY = this.y + this.height - drawH;
-
             ctx.drawImage(this.spriteSheet,
                 sx, sy, this.frameW, this.frameH,
                 drawX, drawY, drawW, drawH);
-
-            // Indicador "!" flutuante (ainda não conversou)
             if (!this.hasSpoken) {
                 const excY = this.y - this._visualTopOffset() - 14 + Math.sin(this.animTimer * 3) * 2;
                 ctx.fillStyle = '#FFD700';
@@ -1304,30 +919,21 @@ class NPC {
                 ctx.fillText('!', this.x + this.width / 2, excY);
                 ctx.textAlign = 'left';
             }
-
             this._drawNameTag(ctx);
             return;
         }
-
-        // ── Fallback: silhueta pixelart ──
         this._drawFallbackCharacter(ctx);
         this._drawNameTag(ctx);
     }
-
     _drawFallbackCharacter(ctx) {
         const cx = this.x + this.width / 2;
         const baseY = this.y + this.height;
-
-        // Escala visual em torno dos pés (hitbox real não muda — ver renderScale).
         ctx.save();
         ctx.translate(cx, baseY);
         ctx.scale(this.renderScale, this.renderScale);
         ctx.translate(-cx, -baseY);
-
-        const bob = Math.sin(this.animTimer * 4) * 0.6; // Suave balanço de respiração
-
+        const bob = Math.sin(this.animTimer * 4) * 0.6; 
         const nameLower = this.name.toLowerCase();
-        
         let isFemale = nameLower.includes('professora') || nameLower.includes('bibliotecaria') || 
                        nameLower.includes('baronesa') || nameLower.includes('duquesa') || nameLower.includes('arasy');
         let isNoble = nameLower.includes('aristocrata') || nameLower.includes('fazendeiro') || 
@@ -1335,42 +941,28 @@ class NPC {
         let isSoldier = nameLower.includes('guarda') || nameLower.includes('soldado');
         let isMerchant = nameLower.includes('vendedor') || nameLower.includes('ambulante');
         let isSpy = nameLower.includes('espiao');
-
-        // Sombra nos pés
         ctx.fillStyle = 'rgba(0,0,0,0.22)';
         ctx.beginPath();
         ctx.ellipse(cx, baseY - 1, this.width / 2.2, 2.5, 0, 0, Math.PI * 2);
         ctx.fill();
-
         const skinColor = '#e8c89e';
-
-        // 1. Pernas & Sapatos (com sombreamento)
         const legH = Math.round(this.height * 0.28);
         const legW = 2.5;
         const pantsColor = isSoldier ? '#1A237E' : (isNoble ? '#222' : '#3e2723');
         const shoeColor = '#141414';
-
         if (isFemale) {
-            // Saia longa para adultas
             ctx.fillStyle = this.color;
             ctx.fillRect(cx - 5, baseY - legH - 2, 10, legH + 1);
-            
-            // Sombra interna da saia (lado direito)
             ctx.fillStyle = 'rgba(0,0,0,0.15)';
             ctx.fillRect(cx, baseY - legH - 2, 5, legH + 1);
-            
-            // Sapatos
             ctx.fillStyle = shoeColor;
             ctx.fillRect(cx - 4, baseY - 1, 2.5, 1.5);
             ctx.fillRect(cx + 1.5, baseY - 1, 2.5, 1.5);
         } else {
-            // Perna Esquerda
             ctx.fillStyle = pantsColor;
             ctx.fillRect(cx - 3.5, baseY - legH - 1, legW, legH);
             ctx.fillStyle = shoeColor;
             ctx.fillRect(cx - 4.5, baseY - 1.5, 3.5, 1.5);
-
-            // Perna Direita (ligeiramente sombreada por profundidade)
             ctx.fillStyle = pantsColor;
             ctx.fillRect(cx + 1, baseY - legH - 1, legW, legH);
             ctx.fillStyle = 'rgba(0,0,0,0.12)';
@@ -1378,182 +970,127 @@ class NPC {
             ctx.fillStyle = shoeColor;
             ctx.fillRect(cx + 1, baseY - 1.5, 3.5, 1.5);
         }
-
-        // 2. Tronco / Corpo (com volume 3D)
         const torsoH = Math.round(this.height * 0.38);
         const torsoW = this.width * 0.55;
         const torsoX = cx - torsoW / 2;
         const torsoY = baseY - legH - torsoH - 1 + bob;
-
-        // Base do casaco/roupa
         ctx.fillStyle = this.color;
         ctx.fillRect(torsoX, torsoY, torsoW, torsoH);
-
-        // Highlight na lateral esquerda do corpo (brilho 3D)
         ctx.fillStyle = 'rgba(255,255,255,0.12)';
         ctx.fillRect(torsoX, torsoY, 2, torsoH);
-
-        // Sombra na lateral direita do corpo
         ctx.fillStyle = 'rgba(0,0,0,0.15)';
         ctx.fillRect(cx, torsoY, torsoW / 2, torsoH);
-
-        // Detalhes da vestimenta de época
         if (isNoble) {
-            // Camisa branca interna
             ctx.fillStyle = '#ffffff';
             ctx.fillRect(cx - 1.5, torsoY, 3, 5);
-            // Gravata / Cravat vermelha com nó
             ctx.fillStyle = '#d32f2f';
             ctx.fillRect(cx - 0.5, torsoY + 2, 1, 3);
-            // Lapelas do casaco
             ctx.fillStyle = '#222222';
             ctx.fillRect(cx - 3, torsoY, 1, torsoH);
             ctx.fillRect(cx + 2, torsoY, 1, torsoH);
         } else if (isSoldier) {
-            // Detalhes dourados do uniforme
             ctx.fillStyle = '#FFD700'; 
             ctx.fillRect(cx - 1, torsoY + 2, 2, 1.5);
             ctx.fillRect(cx - 1, torsoY + 5, 2, 1.5);
-            // Dragona militar dourada nos ombros
             ctx.fillRect(torsoX - 1.5, torsoY - 0.5, 3, 1.5);
             ctx.fillRect(torsoX + torsoW - 1.5, torsoY - 0.5, 3, 1.5);
         } else if (isMerchant) {
-            // Camisa por baixo (creme)
             ctx.fillStyle = '#FFFDD0';
             ctx.fillRect(cx - 2, torsoY, 4, torsoH);
-            // Suspensórios marrons escuros
             ctx.fillStyle = '#3e2723';
             ctx.fillRect(cx - 2.5, torsoY, 1, torsoH);
             ctx.fillRect(cx + 1.5, torsoY, 1, torsoH);
         }
-
-        // 3. Braços e Mãos (3D / Esquerdo frontal, Direito sombreado)
         const armW = 2;
         const armH = torsoH - 1;
-
-        // Braço Esquerdo
         ctx.fillStyle = this.color;
         ctx.fillRect(torsoX - armW, torsoY + 1, armW, armH);
-        ctx.fillStyle = 'rgba(255,255,255,0.1)'; // brilho
+        ctx.fillStyle = 'rgba(255,255,255,0.1)'; 
         ctx.fillRect(torsoX - armW, torsoY + 1, 1, armH);
         ctx.fillStyle = skinColor;
         ctx.fillRect(torsoX - armW, torsoY + 1 + armH, armW, 2);
-
-        // Braço Direito
         ctx.fillStyle = this.color;
         ctx.fillRect(torsoX + torsoW, torsoY + 1, armW, armH);
-        ctx.fillStyle = 'rgba(0,0,0,0.18)'; // sombra de profundidade
+        ctx.fillStyle = 'rgba(0,0,0,0.18)'; 
         ctx.fillRect(torsoX + torsoW, torsoY + 1, armW, armH);
         ctx.fillStyle = skinColor;
         ctx.fillRect(torsoX + torsoW, torsoY + 1 + armH, armW, 2);
-
-        // 4. Cabeça e Rosto
         const headR = this.width * 0.25;
         const headY = torsoY - headR * 0.7;
-
         ctx.fillStyle = skinColor;
         ctx.beginPath();
         ctx.arc(cx, headY, headR, 0, Math.PI * 2);
         ctx.fill();
-
-        // 5. Cabelos, Barbas e Chapéus
         ctx.fillStyle = this.accentColor;
-        
         if (isFemale) {
-            // Cabelo volumoso com coque
             ctx.beginPath();
             ctx.arc(cx, headY - 1, headR * 0.95, Math.PI, Math.PI * 2);
             ctx.fill();
             ctx.beginPath();
             ctx.arc(cx, headY - headR, 3.2, 0, Math.PI * 2);
             ctx.fill();
-            // Brilho no coque/cabelo
             ctx.fillStyle = 'rgba(255,255,255,0.2)';
             ctx.fillRect(cx - 1, headY - headR - 1, 2, 2);
-            
             if (nameLower.includes('baronesa') || nameLower.includes('duquesa')) {
-                ctx.fillStyle = '#FFD700'; // Tiara dourada
+                ctx.fillStyle = '#FFD700'; 
                 ctx.fillRect(cx - 3, headY - headR, 6, 1.5);
-                ctx.fillStyle = '#00E5FF'; // Joia azul no centro da tiara
+                ctx.fillStyle = '#00E5FF'; 
                 ctx.fillRect(cx - 0.5, headY - headR, 1, 1);
             }
         } else {
-            // Cabelo masculino
             ctx.beginPath();
             ctx.arc(cx, headY - 1, headR * 0.9, Math.PI, Math.PI * 2);
             ctx.fill();
-            
-            // Barba histórica volumosa
             if (nameLower.includes('deodoro') || nameLower.includes('nabuco') || nameLower.includes('patrocinio') || nameLower.includes('senador')) {
                 ctx.fillStyle = this.accentColor;
                 ctx.fillRect(cx - 3, headY + 1, 6, 3.5);
-                // Detalhe de textura/grisalho na barba
                 ctx.fillStyle = 'rgba(255,255,255,0.25)';
                 ctx.fillRect(cx - 2, headY + 2, 4, 1);
             }
-            
-            // Chapéus tridimensionais detalhados
             if (isNoble) {
-                // Cartola preta (Top Hat)
                 ctx.fillStyle = '#181818'; 
-                ctx.fillRect(cx - 5.5, headY - headR, 11, 1.5); // Aba
-                ctx.fillRect(cx - 3.5, headY - headR - 6, 7, 6); // Copa
-                // Faixa vermelha da cartola
+                ctx.fillRect(cx - 5.5, headY - headR, 11, 1.5); 
+                ctx.fillRect(cx - 3.5, headY - headR - 6, 7, 6); 
                 ctx.fillStyle = '#c62828';
                 ctx.fillRect(cx - 3.5, headY - headR - 1.5, 7, 1.5);
-                // Fivela dourada na cartola
                 ctx.fillStyle = '#FFD700';
                 ctx.fillRect(cx - 1, headY - headR - 1.5, 2, 1.5);
             } else if (isMerchant) {
-                // Chapéu simples
                 ctx.fillStyle = '#8d6e63';
                 ctx.fillRect(cx - 5, headY - headR, 10, 1.5);
                 ctx.fillRect(cx - 3, headY - headR - 2.5, 6, 2.5);
-                ctx.fillStyle = '#5d4037'; // Faixa marrom escura
+                ctx.fillStyle = '#5d4037'; 
                 ctx.fillRect(cx - 3, headY - headR - 1, 6, 1);
             } else if (isSoldier) {
-                // Quepe militar detalhado
                 ctx.fillStyle = '#0D47A1';
-                ctx.fillRect(cx - 4.5, headY - headR - 2, 9, 3.5); // Copa
-                ctx.fillStyle = '#1565C0'; // Visor/Highlight
+                ctx.fillRect(cx - 4.5, headY - headR - 2, 9, 3.5); 
+                ctx.fillStyle = '#1565C0'; 
                 ctx.fillRect(cx - 4, headY - headR - 2, 8, 1);
-                ctx.fillStyle = '#FFD700'; // Escudo militar no centro
+                ctx.fillStyle = '#FFD700'; 
                 ctx.fillRect(cx - 0.5, headY - headR - 1, 1, 1.5);
             } else if (isSpy) {
-                // Chapéu de espião aba larga
                 ctx.fillStyle = '#263238';
-                ctx.fillRect(cx - 6.5, headY - headR, 13, 1.5); // Aba larga
+                ctx.fillRect(cx - 6.5, headY - headR, 13, 1.5); 
                 ctx.fillRect(cx - 3.5, headY - headR - 2.5, 7, 2.5);
             }
         }
-
-        // 6. Detalhes Faciais (Olhos com brilho, bochechas, etc.)
         ctx.fillStyle = '#0a0a0a';
         ctx.fillRect(cx - 2, headY - 1, 1.2, 1.2);
         ctx.fillRect(cx + 1, headY - 1, 1.2, 1.2);
-
-        // Brilho sutil nos olhos (pixel art highlight)
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(cx - 1.6, headY - 1, 0.5, 0.5);
         ctx.fillRect(cx + 1.4, headY - 1, 0.5, 0.5);
-
-        // Blush sutil nas bochechas para as mulheres
         if (isFemale) {
             ctx.fillStyle = 'rgba(255, 120, 120, 0.4)';
             ctx.fillRect(cx - 3, headY + 0.5, 1.2, 1);
             ctx.fillRect(cx + 1.8, headY + 0.5, 1.2, 1);
         }
-
-        // Bigode simples de época para a maioria dos homens
         if (!isFemale && (isNoble || nameLower.includes('contador') || nameLower.includes('mineiro'))) {
             ctx.fillStyle = '#2d1e18';
             ctx.fillRect(cx - 2.5, headY + 1.2, 5, 1);
-            // Pontas do bigode curvadas para cima
             ctx.fillRect(cx - 3.5, headY + 0.8, 1, 1);
             ctx.fillRect(cx + 2.5, headY + 0.8, 1, 1);
         }
-
-        // Indicador "!" flutuante
         const excY = headY - headR - 6 + Math.sin(this.animTimer * 3) * 2;
         if (!this.hasSpoken) {
             ctx.fillStyle = '#FFD700';
@@ -1562,12 +1099,9 @@ class NPC {
             ctx.fillText('!', cx, excY - (isNoble ? 6 : 0));
             ctx.textAlign = 'left';
         }
-
         ctx.restore();
     }
-
     getHitbox() {
-        // Caixa de colisão física restrita aos pés para melhor movimentação
         const paddingX = 2;
         const hitboxW = this.width - paddingX * 2;
         const hitboxH = Math.min(10, this.height);
@@ -1578,109 +1112,56 @@ class NPC {
             height: hitboxH
         };
     }
-
-    /**
-     * Caixa usada para detectar interação (checkInteraction) e para o overlay
-     * de debug (F3). Por padrão é a própria x/y/width/height do NPC — correto
-     * para o desenho pixelart genérico, que preenche essa caixa. Subclasses com
-     * desenho próprio cujo visual real não coincide com essa caixa (ex.: Arasy)
-     * devem sobrescrever este método para refletir as dimensões reais desenhadas.
-     */
     getDetectionBox() {
         return { x: this.x, y: this.y, width: this.width, height: this.height };
     }
-
     _drawNameTag(ctx) {
         const cx = this.x + this.width / 2;
         const topY = this.y - this._visualTopOffset();
-
         ctx.fillStyle = 'rgba(0,0,0,0.5)';
         const nameW = ctx.measureText ? ctx.measureText(this.name).width : this.name.length * 5;
         ctx.font = '6px sans-serif';
         const measured = ctx.measureText(this.name).width;
         ctx.fillRect(cx - measured / 2 - 2, topY - 10, measured + 4, 9);
-
         ctx.fillStyle = this.hasSpoken ? 'rgba(200,200,200,0.6)' : '#F5F0E8';
         ctx.textAlign = 'center';
         ctx.fillText(this.name, cx, topY - 3);
         ctx.textAlign = 'left';
     }
 }
-// ═══════ src/entities/Player.js ═══════
 
 
-/**
- * Player — Alex.
- *
- * Spritesheet: Cute Fantasy Free (Player.png — 192x320, 6 col x 10 row de 32px).
- * Rows de caminhada: 0=baixo, 1=esquerda(sheet própria), 2=cima, 3=direita.
- *
- * Movimentação:
- *  - Velocidade normalizada na diagonal.
- *  - Colisão resolvida por eixo (desliza em paredes).
- *  - "Corner assist": ao esbarrar na quina de um obstáculo, o jogador é
- *    deslizado suavemente para contorná-la em vez de travar.
- */
 class Player {
-
-    /** facing → row na spritesheet de caminhada. */
     static DIR_ROW = [0, 2, 1, 1];
-
-    /**
-     * Distância máxima (px) do auxílio de quina. Quanto maior, mais o jogador
-     * "desliza" para dentro de portas/passagens estreitas sem precisar alinhar
-     * pixel a pixel — reduz a sensação de travar na entrada/saída de locais.
-     */
     static CORNER_ASSIST_RANGE = 9;
-
     constructor(x, y, config = {}) {
         this.x = x;
         this.y = y;
-
-        // Hitbox (nos pés do personagem)
         this.width  = config.hitboxW || 10;
         this.height = config.hitboxH || 10;
-
         this.speed  = config.speed || 110;
-        this.facing = 0;             // 0=baixo 1=cima 2=esquerda 3=direita
-
-        // Spritesheet
+        this.facing = 0;             
         this.spriteSheet = config.spriteSheet || null;
         this.spriteLeft  = config.spriteLeft  || null;
         this.frameW      = config.frameW      || 32;
         this.frameH      = config.frameH      || 32;
         this.maxFrames   = config.maxFrames   || 6;
-
-        // Animação
         this.animFrame = 0;
         this.animTimer = 0;
         this.animSpeed = config.animSpeed || 0.12;
         this.isMoving  = false;
-        this.hasMoved  = false;      // usado pelo tutorial
-
+        this.hasMoved  = false;      
         this.fallbackColor = config.fallbackColor || '#3a7898';
-
         this._recalcOffsets();
     }
-
     _recalcOffsets() {
         this.spriteOffsetX = -(this.frameW - this.width) / 2;
         this.spriteOffsetY = Math.round(-(this.frameH - this.height) * 0.64);
     }
-
-    /**
-     * Atualiza input, movimento, colisões e animação.
-     * @param {number} dt
-     * @param {import('../core/Input.js').Input} input
-     * @param {import('../world/Map.js').Map|null} gameMap
-     * @param {Array} interactables — para colisão com NPCs
-     */
     update(dt, input, gameMap = null, interactables = []) {
         const { dx, dy } = this._readDirection(input);
-
         this.isMoving = (dx !== 0 || dy !== 0);
         if (this.isMoving) this.hasMoved = true;
-
         if (this.isMoving) {
             this._move(dx * this.speed * dt, dy * this.speed * dt, gameMap, interactables);
             this._advanceAnimation(dt);
@@ -1689,16 +1170,12 @@ class Player {
             this.animTimer = 0;
         }
     }
-
-    /** Lê o teclado e devolve o vetor de direção normalizado. */
     _readDirection(input) {
         let dx = 0, dy = 0;
         if (input.isDown('ArrowUp')    || input.isDown('KeyW')) { dy = -1; this.facing = 1; }
         if (input.isDown('ArrowDown')  || input.isDown('KeyS')) { dy =  1; this.facing = 0; }
         if (input.isDown('ArrowLeft')  || input.isDown('KeyA')) { dx = -1; this.facing = 2; }
         if (input.isDown('ArrowRight') || input.isDown('KeyD')) { dx =  1; this.facing = 3; }
-
-        // Diagonal não pode ser mais rápida que os eixos
         if (dx !== 0 && dy !== 0) {
             const INV_SQRT2 = 0.7071;
             dx *= INV_SQRT2;
@@ -1706,20 +1183,15 @@ class Player {
         }
         return { dx, dy };
     }
-
-    /** Move com colisão por eixo + auxílio de quina. */
     _move(mx, my, gameMap, interactables) {
         if (!gameMap) {
             this.x += mx;
             this.y += my;
             return;
         }
-
         const blockedAt = (x, y) =>
             gameMap.isColliding(x, y, this.width, this.height) ||
             this._collidesWithNPCs(x, y, interactables);
-
-        // Eixo X
         if (mx !== 0) {
             if (!blockedAt(this.x + mx, this.y)) {
                 this.x += mx;
@@ -1727,8 +1199,6 @@ class Player {
                 this._cornerAssist(mx, 0, blockedAt);
             }
         }
-
-        // Eixo Y
         if (my !== 0) {
             if (!blockedAt(this.x, this.y + my)) {
                 this.y += my;
@@ -1737,26 +1207,19 @@ class Player {
             }
         }
     }
-
-    /**
-     * Auxílio de quina: se o caminho reto está bloqueado apenas pela
-     * borda de um obstáculo, desliza no eixo perpendicular para contorná-lo.
-     */
     _cornerAssist(mx, my, blockedAt) {
         const range = Player.CORNER_ASSIST_RANGE;
         const step  = Math.max(Math.abs(mx), Math.abs(my));
-
         for (let offset = 1; offset <= range; offset++) {
-            if (mx !== 0) { // movendo em X: tenta desviar em Y
+            if (mx !== 0) { 
                 if (!blockedAt(this.x + mx, this.y - offset)) { this.y -= step; return; }
                 if (!blockedAt(this.x + mx, this.y + offset)) { this.y += step; return; }
-            } else {        // movendo em Y: tenta desviar em X
+            } else {        
                 if (!blockedAt(this.x - offset, this.y + my)) { this.x -= step; return; }
                 if (!blockedAt(this.x + offset, this.y + my)) { this.x += step; return; }
             }
         }
     }
-
     _advanceAnimation(dt) {
         this.animTimer += dt;
         if (this.animTimer >= this.animSpeed) {
@@ -1764,8 +1227,6 @@ class Player {
             this.animTimer = 0;
         }
     }
-
-    /** Colisão física contra NPCs (usa hitbox dos pés de cada um). */
     _collidesWithNPCs(x, y, interactables) {
         const box = { x, y, width: this.width, height: this.height };
         for (const obj of interactables) {
@@ -1774,30 +1235,19 @@ class Player {
         }
         return false;
     }
-
-    /**
-     * Caixa de interação projetada na frente do jogador, na direção que
-     * ele está encarando (facing). Centralizada no eixo perpendicular ao
-     * movimento, para que um NPC alinhado com o jogador seja detectado
-     * independente de ligeiras variações de posição — não só quando
-     * exatamente ombro-a-ombro com a hitbox.
-     */
     getInteractionBox() {
         const size = 20;
         const cx = this.x + this.width  / 2;
         const cy = this.y + this.height / 2;
         switch (this.facing) {
-            case 0: return { x: cx - size / 2,      y: this.y + this.height, width: size, height: size }; // baixo
-            case 1: return { x: cx - size / 2,      y: this.y - size,        width: size, height: size }; // cima
-            case 2: return { x: this.x - size,      y: cy - size / 2,        width: size, height: size }; // esquerda
-            default: return { x: this.x + this.width, y: cy - size / 2,      width: size, height: size }; // direita
+            case 0: return { x: cx - size / 2,      y: this.y + this.height, width: size, height: size }; 
+            case 1: return { x: cx - size / 2,      y: this.y - size,        width: size, height: size }; 
+            case 2: return { x: this.x - size,      y: cy - size / 2,        width: size, height: size }; 
+            default: return { x: this.x + this.width, y: cy - size / 2,      width: size, height: size }; 
         }
     }
-
-    /** Empurra o jogador para fora de colisões no spawn. */
     resolveCollision(gameMap) {
         if (!gameMap || !gameMap.isColliding(this.x, this.y, this.width, this.height)) return;
-
         const STEP = 2, MAX_DIST = 64;
         for (let dist = STEP; dist <= MAX_DIST; dist += STEP) {
             const offsets = [
@@ -1816,87 +1266,53 @@ class Player {
         }
         console.warn('⚠️ Não foi possível resolver colisão de spawn!');
     }
-
     draw(ctx) {
         const drawX = this.x + this.spriteOffsetX;
         const drawY = this.y + this.spriteOffsetY;
-
         if (this.spriteSheet && this.spriteSheet.complete && this.spriteSheet.naturalWidth > 0) {
             let sheet = this.spriteSheet;
             let row   = Player.DIR_ROW[this.facing] || 0;
-
-            // Direção esquerda usa spritesheet dedicada
             if (this.facing === 2 && this.spriteLeft && this.spriteLeft.complete) {
                 sheet = this.spriteLeft;
                 row   = 1;
             }
-
             ctx.drawImage(sheet,
                 this.animFrame * this.frameW, row * this.frameH, this.frameW, this.frameH,
                 drawX, drawY, this.frameW, this.frameH);
             return;
         }
-
         ctx.fillStyle = this.fallbackColor;
         ctx.fillRect(this.x, this.y, this.width, this.height);
     }
 }
 
-// ═══════ src/entities/Arasy.js ═══════
-
-/**
- * Arasy — a guardiã indígena da memória histórica do Brasil.
- *
- * Nome tupi-guarani: de "ara" (dia, tempo, céu) + "sy" (mãe, origem) — "mãe do
- * tempo/do dia", figura da mitologia guarani ligada à criação do mundo. Aqui,
- * a que guarda o tempo e a memória do povo brasileiro.
- *
- * Representada como uma mulher INDÍGENA brasileira, desenhada em pixel art
- * procedural (não depende de spritesheet): pele morena, cabelo liso preto,
- * cocar de penas (verde/amarelo/vermelho), pintura facial de urucum, colar de
- * sementes e túnica de fibra natural com grafismo geométrico. A aura dourada
- * e as partículas representam a "memória viva" que ela protege — não é um
- * anjo nem uma figura mitológica europeia.
- */
 class Arasy extends NPC {
-
     static PALETTE = Object.freeze({
         skin        : '#8d5a3b',
         skinShade   : '#71462e',
         hair        : '#17110b',
-        garment     : '#b5744a',   // fibra natural / terracota
+        garment     : '#b5744a',   
         garmentShade: '#8f5836',
-        pattern     : '#c0392b',   // grafismo urucum (vermelho)
+        pattern     : '#c0392b',   
         patternDark : '#3a2417',
-        headband    : '#5a3720',   // faixa do cocar
-        trim        : '#e6b422',   // adornos dourados
-        beads       : '#f4ead2',   // sementes claras do colar
-        featherG    : '#2E7D32',   // pena verde
-        featherY    : '#e6b422',   // pena amarela
-        featherR    : '#c0392b',   // pena vermelha
-        paint       : '#c0392b',   // pintura facial (urucum)
+        headband    : '#5a3720',   
+        trim        : '#e6b422',   
+        beads       : '#f4ead2',   
+        featherG    : '#2E7D32',   
+        featherY    : '#e6b422',   
+        featherR    : '#c0392b',   
+        paint       : '#c0392b',   
         eyes        : '#241812',
     });
-
     constructor(x, y) {
         super(x, y, { name: 'Arasy', width: 18, height: 30 });
         this.glowTimer = 0;
         this.particles = Array.from({ length: 10 }, () => this._createParticle());
         this.hasBeenIntroduced = false;
     }
-
-    /**
-     * A silhueta real desenhada em _drawGuardian (cocar de penas + túnica) não
-     * preenche o retângulo 18x30 inteiro: as penas do cocar sobem ~3px acima de
-     * this.y e a barra da túnica termina ~4px antes de this.y+height. Sem este
-     * ajuste, a caixa de interação/debug sobra vazio embaixo e corta o topo das
-     * penas. Valores calculados a partir das coordenadas fixas de _drawGuardian
-     * (ignorando a flutuação "bob", que é só ±2.5px).
-     */
     getDetectionBox() {
         return { x: this.x + 2, y: this.y - 4, width: 14, height: 30 };
     }
-
     _createParticle() {
         return {
             x: this.x + Math.random() * this.width,
@@ -1907,7 +1323,6 @@ class Arasy extends NPC {
             maxLife: 2,
         };
     }
-
     update(dt) {
         super.update(dt);
         this.glowTimer += dt;
@@ -1918,7 +1333,6 @@ class Arasy extends NPC {
             if (p.life <= 0) Object.assign(p, this._createParticle());
         }
     }
-
     draw(ctx) {
         const bob = Math.sin(this.glowTimer * 2) * 2.5;
         this._drawAura(ctx);
@@ -1926,21 +1340,15 @@ class Arasy extends NPC {
         this._drawParticles(ctx);
         this._drawNameTag(ctx);
     }
-
-    /** Pixel art da guardiã indígena (18x30, ancorada em this.x/this.y). */
     _drawGuardian(ctx, bob) {
         const P  = Arasy.PALETTE;
         const x  = this.x;
         const y  = this.y + bob;
         const cx = x + this.width / 2;
-
-        // Brilho dourado sob os pés (memória/aura)
         ctx.fillStyle = 'rgba(230, 180, 60, 0.35)';
         ctx.beginPath();
         ctx.ellipse(cx, this.y + this.height + 2, 9, 2.5, 0, 0, Math.PI * 2);
         ctx.fill();
-
-        // ── Túnica de fibra natural (silhueta em A) ──
         ctx.fillStyle = P.garment;
         ctx.beginPath();
         ctx.moveTo(cx - 3.5, y + 10);
@@ -1949,7 +1357,6 @@ class Arasy extends NPC {
         ctx.lineTo(cx - 7,   y + 26);
         ctx.closePath();
         ctx.fill();
-        // sombra lateral
         ctx.fillStyle = P.garmentShade;
         ctx.beginPath();
         ctx.moveTo(cx + 1,   y + 10);
@@ -1958,37 +1365,27 @@ class Arasy extends NPC {
         ctx.lineTo(cx + 2,   y + 26);
         ctx.closePath();
         ctx.fill();
-
-        // Grafismo geométrico indígena (urucum) na túnica
         ctx.fillStyle = P.pattern;
         ctx.fillRect(cx - 6, y + 17, 13, 2.2);
         ctx.fillStyle = P.patternDark;
         for (let i = -6; i <= 6; i += 2.6) ctx.fillRect(cx + i, y + 17, 1.2, 2.2);
-        // barra da bainha
         ctx.fillStyle = P.pattern;
         ctx.fillRect(cx - 7, y + 24.5, 14, 1.5);
-
-        // ── Braços e mãos ──
         ctx.fillStyle = P.skin;
         ctx.fillRect(cx - 6.5, y + 11, 2.5, 8);
         ctx.fillRect(cx + 4,   y + 11, 2.5, 8);
         ctx.fillStyle = P.skinShade;
-        ctx.fillRect(cx + 5,   y + 11, 1.5, 8);   // sombra no braço direito
+        ctx.fillRect(cx + 5,   y + 11, 1.5, 8);   
         ctx.fillStyle = P.skin;
         ctx.fillRect(cx - 6.5, y + 19, 2.5, 2);
         ctx.fillRect(cx + 4,   y + 19, 2.5, 2);
-        // braceletes dourados
         ctx.fillStyle = P.trim;
         ctx.fillRect(cx - 6.5, y + 14.5, 2.5, 1);
         ctx.fillRect(cx + 4,   y + 14.5, 2.5, 1);
-
-        // Colar de sementes
         ctx.fillStyle = P.beads;
         ctx.fillRect(cx - 2.5, y + 10.5, 5, 1);
         ctx.fillStyle = P.pattern;
-        ctx.fillRect(cx - 0.5, y + 11.3, 1, 1);   // pingente central
-
-        // ── Pescoço e cabeça ──
+        ctx.fillRect(cx - 0.5, y + 11.3, 1, 1);   
         ctx.fillStyle = P.skin;
         ctx.fillRect(cx - 1.5, y + 8.5, 3, 2);
         ctx.beginPath();
@@ -1998,17 +1395,13 @@ class Arasy extends NPC {
         ctx.beginPath();
         ctx.arc(cx + 1.5, y + 6, 3.2, -0.6, 1.3);
         ctx.fill();
-
-        // ── Cabelo liso preto ──
         ctx.fillStyle = P.hair;
-        ctx.fillRect(cx - 4.9, y + 3, 1.9, 8.5);   // lateral esquerda longa
-        ctx.fillRect(cx + 3,   y + 3, 1.9, 8.5);   // lateral direita longa
+        ctx.fillRect(cx - 4.9, y + 3, 1.9, 8.5);   
+        ctx.fillRect(cx + 3,   y + 3, 1.9, 8.5);   
         ctx.beginPath();
-        ctx.arc(cx, y + 4, 4.9, Math.PI * 0.92, Math.PI * 2.08);   // calota
+        ctx.arc(cx, y + 4, 4.9, Math.PI * 0.92, Math.PI * 2.08);   
         ctx.fill();
-        ctx.fillRect(cx - 4.4, y + 2.6, 8.8, 1.6);   // franja reta
-
-        // ── Cocar (penas + faixa) ──
+        ctx.fillRect(cx - 4.4, y + 2.6, 8.8, 1.6);   
         const feather = (fx, h, color) => {
             ctx.fillStyle = color;
             ctx.beginPath();
@@ -2024,18 +1417,14 @@ class Arasy extends NPC {
         feather( 0, 5.6, P.featherY);
         feather( 2, 4.8, P.featherG);
         feather( 4, 3.5, P.featherR);
-        // faixa da testa (por cima das bases das penas)
         ctx.fillStyle = P.headband;
         ctx.fillRect(cx - 4.9, y + 2.2, 9.8, 1.7);
         ctx.fillStyle = P.trim;
-        ctx.fillRect(cx - 4.9, y + 3.2, 9.8, 0.6);   // fio dourado na faixa
-        // contas coloridas na faixa
+        ctx.fillRect(cx - 4.9, y + 3.2, 9.8, 0.6);   
         ctx.fillStyle = P.featherY;
         ctx.fillRect(cx - 3.5, y + 2.5, 0.9, 0.9);
         ctx.fillRect(cx - 0.4, y + 2.5, 0.9, 0.9);
         ctx.fillRect(cx + 2.6, y + 2.5, 0.9, 0.9);
-
-        // ── Rosto: pintura de urucum + olhos ──
         ctx.fillStyle = P.paint;
         ctx.fillRect(cx - 3.2, y + 6.3, 1.9, 0.9);
         ctx.fillRect(cx + 1.3, y + 6.3, 1.9, 0.9);
@@ -2046,17 +1435,14 @@ class Arasy extends NPC {
         ctx.fillRect(cx - 1.9, y + 5, 0.5, 0.5);
         ctx.fillRect(cx + 1.3, y + 5, 0.5, 0.5);
     }
-
     _drawAura(ctx) {
         const cx = this.x + this.width / 2;
         const cy = this.y + this.height / 2;
         const radius = 24 + Math.sin(this.glowTimer * 4) * 4;
-
         const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius);
         grad.addColorStop(0, 'rgba(255, 230, 150, 0.4)');
         grad.addColorStop(0.5, 'rgba(120, 220, 140, 0.12)');
         grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-
         ctx.save();
         ctx.globalCompositeOperation = 'lighter';
         ctx.fillStyle = grad;
@@ -2065,7 +1451,6 @@ class Arasy extends NPC {
         ctx.fill();
         ctx.restore();
     }
-
     _drawParticles(ctx) {
         ctx.fillStyle = '#FFF';
         for (const p of this.particles) {
@@ -2077,18 +1462,6 @@ class Arasy extends NPC {
         ctx.globalAlpha = 1;
     }
 }
-
-// ═══════ src/entities/Interactable.js ═══════
-/**
- * Interactable — Objeto interagível no mundo.
- *
- * Tipos:
- *  - Portal (porta_igreja, saida_biblioteca, etc.): invisível, ativado por proximidade
- *  - Item (item_diario, etc.): pode ter glow sutil se configurado
- *  - Objeto de cenário (estatua_tiradentes, etc.): invisível, ativado por proximidade
- *
- * config.visible = true → desenha indicador visual (padrão: false para portais)
- */
 class Interactable {
     constructor(x, y, config = {}) {
         this.x = x;
@@ -2096,45 +1469,25 @@ class Interactable {
         this.width  = config.width  || 16;
         this.height = config.height || 16;
         this.name   = config.name   || 'Objeto';
-
-        // Diálogos: [{ speaker: 'Nome', text: 'Fala...' }, ...]
         this.dialogueLines = config.dialogueLines || [];
-
-        // Callback executado após o diálogo terminar
         this.onInteractComplete = config.onInteractComplete || null;
-
-        // Estado
         this.canInteract = true;
         this.customDraw = config.customDraw || null;
-
-        // Visual
         this.visible     = config.visible !== undefined ? config.visible : !!config.isItem;
         this.glowEnabled = config.glow === true;
         this.glowTimer   = 0;
         this.glowColor   = config.glowColor || 'rgba(255, 215, 0, 0.4)';
-
-        // Folga da área de detecção de interação (px por lado). Usado nas portas/
-        // transições para que a intenção de entrar seja reconhecida ao chegar
-        // perto da porta de qualquer direção razoável, sem alinhamento exato.
         this.detectPad = config.detectPad || 0;
     }
-
     update(dt) {
         this.glowTimer += dt;
     }
-
     getDialogue() {
         return {
             lines:    this.dialogueLines,
             callback: this.onInteractComplete
         };
     }
-
-    /**
-     * Ver NPC.getDetectionBox() — caixa real usada para interação/debug.
-     * Expandida por `detectPad` (folga) e mantida centrada na posição real do
-     * objeto, para portas/transições serem detectadas sem alinhamento exato.
-     */
     getDetectionBox() {
         const p = this.detectPad;
         return {
@@ -2144,7 +1497,6 @@ class Interactable {
             height: this.height + p * 2,
         };
     }
-
     draw(ctx) {
         if (this.customDraw) {
             this.customDraw(ctx);
@@ -2153,7 +1505,6 @@ class Interactable {
             ctx.lineWidth = 1;
             ctx.strokeRect(this.x, this.y, this.width, this.height);
         } else if (this.visible && this.glowEnabled) {
-            // Itens visíveis: apenas um leve brilho para indicar que é interagível
             const pulse = Math.sin(this.glowTimer * 3) * 0.2 + 0.35;
             ctx.globalAlpha = pulse;
             ctx.fillStyle = this.glowColor;
@@ -2167,8 +1518,6 @@ class Interactable {
             );
             ctx.fill();
             ctx.globalAlpha = 1;
-
-            // Pequeno indicador "!" flutuante
             const bounceY = Math.sin(this.glowTimer * 4) * 2;
             ctx.fillStyle = '#FFD700';
             ctx.font = 'bold 8px monospace';
@@ -2176,27 +1525,13 @@ class Interactable {
             ctx.fillText('!', this.x + this.width / 2, this.y - 4 + bounceY);
             ctx.textAlign = 'left';
         }
-
-        // Portais e objetos de cenário: invisíveis (sem draw)
-        // São detectados apenas pela hitbox na interação
     }
 }
 
-// ═══════ src/entities/MagicBook.js ═══════
-
-/**
- * MagicBook — o livro antigo já desenhado no tile de fundo da biblioteca
- * (estante/atril com livro aberto). Esta classe não desenha um livro por
- * cima: ela só adiciona o brilho mágico (halo pulsante, fagulhas subindo,
- * indicador "!") ancorado exatamente sobre o tile real, para não duplicar
- * nem deslocar o visual que já existe no mapa.
- */
 class MagicBook extends Interactable {
-
     static PALETTE = Object.freeze({
         runes: '#ffd75e',
     });
-
     constructor(x, y, config = {}) {
         super(x, y, {
             ...config,
@@ -2206,7 +1541,6 @@ class MagicBook extends Interactable {
         });
         this.sparkles = Array.from({ length: 6 }, () => this._createSparkle());
     }
-
     _createSparkle() {
         return {
             x: this.x + 2 + Math.random() * (this.width - 4),
@@ -2216,7 +1550,6 @@ class MagicBook extends Interactable {
             maxLife: 1.7,
         };
     }
-
     update(dt) {
         super.update(dt);
         for (const s of this.sparkles) {
@@ -2225,16 +1558,11 @@ class MagicBook extends Interactable {
             if (s.life <= 0) Object.assign(s, this._createSparkle());
         }
     }
-
     draw(ctx) {
         const P    = MagicBook.PALETTE;
         const bob  = Math.sin(this.glowTimer * 2.2) * 1.8;
         const cx   = this.x + this.width / 2;
-        // Halo deslocado um pouco para baixo e com raio vertical contido dentro
-        // da própria célula do tile, para não invadir a decoração acima (teto)
-        // nem a mesa abaixo.
         const cy   = this.y + this.height / 2 + 2 + bob;
-
         const pulse = 0.25 + Math.sin(this.glowTimer * 3) * 0.12;
         ctx.save();
         ctx.globalAlpha = pulse;
@@ -2243,17 +1571,12 @@ class MagicBook extends Interactable {
         ctx.ellipse(cx, cy, this.width / 2 + 4, this.height / 2 - 4, 0, 0, Math.PI * 2);
         ctx.fill();
         ctx.restore();
-
-        // Fagulhas subindo (dão a sensação de páginas/magia balançando)
         ctx.fillStyle = P.runes;
         for (const s of this.sparkles) {
             ctx.globalAlpha = Math.max(0, s.life / s.maxLife) * 0.9;
             ctx.fillRect(s.x, s.y, 1.2, 1.2);
         }
         ctx.globalAlpha = 1;
-
-        // Indicador "!" — mantido dentro do topo da própria célula do livro,
-        // sem subir sobre a decoração do teto na célula acima.
         const bounceY = Math.sin(this.glowTimer * 4) * 2;
         ctx.fillStyle = '#FFD700';
         ctx.font = 'bold 8px monospace';
@@ -2263,20 +1586,7 @@ class MagicBook extends Interactable {
     }
 }
 
-// ═══════ src/entities/PhaseStatue.js ═══════
-
-/**
- * PhaseStatue — estátua comemorativa de um ato no Templo de Arasy.
- *
- * Estado visual derivado do GameState (nunca duplicado localmente):
- *  - Ato pendente  → estátua quebrada (busto rachado, entulho na base)
- *  - Ato concluído → estátua restaurada, com brilho dourado
- *
- * O exame (tecla E) explica o que a estátua representa.
- */
 class PhaseStatue extends Interactable {
-
-    /** Aparência e textos por ato. */
     static ACT_INFO = Object.freeze({
         1: {
             label : 'Inconfidência Mineira — 1789',
@@ -2321,13 +1631,6 @@ class PhaseStatue extends Interactable {
             ],
         },
     });
-
-    /**
-     * @param {number} x @param {number} y
-     * @param {1|2|3} act
-     * @param {import('../core/GameState.js').GameState} gameState
-     * @param {{width?: number, height?: number}} [config]
-     */
     constructor(x, y, act, gameState, config = {}) {
         const info = PhaseStatue.ACT_INFO[act];
         super(x, y, {
@@ -2342,12 +1645,9 @@ class PhaseStatue extends Interactable {
         this.accent    = info.accent;
         this.timer     = Math.random() * 10;
     }
-
     get restored() {
         return this.gameState.isActCompleted(this.act);
     }
-
-    /** Diálogo muda conforme o estado — sempre re-consultado. */
     getDialogue() {
         const info = PhaseStatue.ACT_INFO[this.act];
         return {
@@ -2355,15 +1655,12 @@ class PhaseStatue extends Interactable {
             callback: null,
         };
     }
-
     update(dt) {
         this.timer += dt;
     }
-
     draw(ctx) {
         const cx   = this.x + this.width / 2;
         const base = this.y + this.height;
-
         this._drawPedestal(ctx, cx, base);
         if (this.restored) {
             this._drawFigure(ctx, cx, base, false);
@@ -2373,36 +1670,28 @@ class PhaseStatue extends Interactable {
             this._drawRubble(ctx, cx, base);
         }
     }
-
     _drawPedestal(ctx, cx, base) {
-        // Base de pedra em dois degraus
         ctx.fillStyle = '#8f8a80';
         ctx.fillRect(cx - 13, base - 8, 26, 8);
         ctx.fillStyle = '#a8a396';
         ctx.fillRect(cx - 10, base - 14, 20, 7);
-        // Sombra do degrau
         ctx.fillStyle = 'rgba(0,0,0,0.2)';
         ctx.fillRect(cx - 13, base - 2, 26, 2);
-        // Placa com a cor do ato
         ctx.fillStyle = this.accent;
         ctx.fillRect(cx - 5, base - 7, 10, 4);
     }
-
     _drawFigure(ctx, cx, base, broken) {
         const stone  = broken ? '#7d786e' : '#cfc9b8';
         const shade  = broken ? '#5f5b52' : '#a8a396';
         const top    = base - 14;
-
         if (broken) {
-            // Apenas o torso partido, inclinado
             ctx.save();
             ctx.translate(cx, top - 10);
             ctx.rotate(-0.12);
             ctx.fillStyle = stone;
-            ctx.fillRect(-6, -8, 12, 16);       // torso
+            ctx.fillRect(-6, -8, 12, 16);       
             ctx.fillStyle = shade;
-            ctx.fillRect(1, -8, 5, 16);         // sombra lateral
-            // Linha de fratura no topo
+            ctx.fillRect(1, -8, 5, 16);         
             ctx.fillStyle = '#4a463f';
             ctx.beginPath();
             ctx.moveTo(-6, -8);
@@ -2411,8 +1700,6 @@ class PhaseStatue extends Interactable {
             ctx.closePath();
             ctx.fill();
             ctx.restore();
-
-            // Rachaduras no pedestal
             ctx.strokeStyle = '#4a463f';
             ctx.lineWidth = 1;
             ctx.beginPath();
@@ -2422,24 +1709,19 @@ class PhaseStatue extends Interactable {
             ctx.stroke();
             return;
         }
-
-        // Figura completa: corpo, braço erguido com tocha/bandeira
         ctx.fillStyle = stone;
-        ctx.fillRect(cx - 5, top - 22, 10, 12);          // torso
+        ctx.fillRect(cx - 5, top - 22, 10, 12);          
         ctx.beginPath();
-        ctx.arc(cx, top - 25, 4, 0, Math.PI * 2);        // cabeça
+        ctx.arc(cx, top - 25, 4, 0, Math.PI * 2);        
         ctx.fill();
-        ctx.fillRect(cx - 7, top - 10, 14, 3);           // base do manto
+        ctx.fillRect(cx - 7, top - 10, 14, 3);           
         ctx.fillStyle = shade;
-        ctx.fillRect(cx + 1, top - 22, 4, 12);           // sombra
-        // Braço erguido
+        ctx.fillRect(cx + 1, top - 22, 4, 12);           
         ctx.fillStyle = stone;
         ctx.fillRect(cx + 4, top - 30, 3, 10);
-        // Chama/emblema na mão (cor do ato)
         ctx.fillStyle = this.accent;
         ctx.fillRect(cx + 3.5, top - 34, 4, 4);
     }
-
     _drawRubble(ctx, cx, base) {
         ctx.fillStyle = '#6e6a61';
         ctx.fillRect(cx - 12, base - 4, 5, 3);
@@ -2449,7 +1731,6 @@ class PhaseStatue extends Interactable {
         ctx.fillRect(cx + 9, base - 3, 3, 2);
         ctx.fillRect(cx - 9, base - 6, 3, 2);
     }
-
     _drawGlow(ctx, cx, base) {
         const pulse = 0.28 + Math.sin(this.timer * 2.5) * 0.12;
         const cy    = base - 26;
@@ -2465,25 +1746,10 @@ class PhaseStatue extends Interactable {
         ctx.restore();
     }
 }
-
-// ═══════ src/entities/SacredSpring.js ═══════
-/**
- * SacredSpring — vitórias-régias e um fio de cachoeira desenhados sobre um
- * poço d'água (o tile de poço vem de farming.png, reaproveitado da Vila Rica).
- *
- * Puramente decorativo (sem colisão nem interação própria): dá vida ao domínio
- * natural de Arasy. A vitória-régia e a cachoeira são desenhadas em código
- * porque não existe um tile equivalente nos tilesets reaproveitáveis do
- * projeto — segue a mesma técnica procedural de Arasy e das estátuas.
- *
- * Ancorada no centro do poço (cx, cy). O z-order usa a própria posição, de
- * modo que a folhagem fica sobre a água mas atrás do altar/personagens.
- */
 class SacredSpring {
     constructor(cx, cy) {
         this.cx = cx;
         this.cy = cy;
-        // Caixa fictícia só para o painter's sort (y crescente = mais à frente).
         this.x = cx - 20;
         this.y = cy;
         this.width = 40;
@@ -2495,14 +1761,9 @@ class SacredSpring {
             { dx:  -1, dy:  8, r: 6, flower: true },
         ];
     }
-
     update(dt) { this.t += dt; }
-
     draw(ctx) {
         const cx = this.cx, cy = this.cy;
-
-        // ── Fio de cachoeira caindo para o poço (curto, para não invadir o
-        //    frontão monumental que fica logo acima do poço da esquerda) ──
         const top = cy - 28, bot = cy - 14;
         ctx.save();
         for (let i = 0; i < 3; i++) {
@@ -2514,7 +1775,6 @@ class SacredSpring {
             ctx.lineTo(cx + off + Math.sin(this.t * 3 + i) * 0.8, bot);
             ctx.stroke();
         }
-        // Espuma na base do fio d'água
         ctx.fillStyle = 'rgba(240,252,255,0.85)';
         for (let i = 0; i < 5; i++) {
             const a = this.t * 2 + i * 1.3;
@@ -2523,13 +1783,9 @@ class SacredSpring {
             ctx.fill();
         }
         ctx.restore();
-
-        // ── Vitórias-régias flutuando ──
         for (const p of this.pads) {
             const px = cx + p.dx;
             const py = cy + p.dy + Math.sin(this.t * 1.5 + p.dx) * 0.6;
-
-            // Disco da folha
             ctx.fillStyle = '#2f7d3a';
             ctx.beginPath();
             ctx.ellipse(px, py, p.r, p.r * 0.72, 0, 0, Math.PI * 2);
@@ -2538,13 +1794,11 @@ class SacredSpring {
             ctx.beginPath();
             ctx.ellipse(px, py - 0.8, p.r * 0.78, p.r * 0.52, 0, 0, Math.PI * 2);
             ctx.fill();
-            // Borda erguida característica da vitória-régia
             ctx.strokeStyle = '#245e2c';
             ctx.lineWidth = 1;
             ctx.beginPath();
             ctx.ellipse(px, py, p.r, p.r * 0.72, 0, 0, Math.PI * 2);
             ctx.stroke();
-            // Nervuras radiais
             ctx.strokeStyle = 'rgba(22,72,32,0.45)';
             ctx.lineWidth = 0.5;
             for (let a = 0; a < Math.PI * 2; a += Math.PI / 4) {
@@ -2553,7 +1807,6 @@ class SacredSpring {
                 ctx.lineTo(px + Math.cos(a) * p.r * 0.9, py + Math.sin(a) * p.r * 0.66);
                 ctx.stroke();
             }
-
             if (p.flower) {
                 ctx.fillStyle = '#e58fb0';
                 for (let a = 0; a < Math.PI * 2; a += Math.PI / 3) {
@@ -2571,27 +1824,13 @@ class SacredSpring {
     }
 }
 
-// ═══════ src/ui/DialogueBox.js ═══════
-
-/**
- * DialogueBox — caixa de diálogo estilo RPG, com:
- *  - efeito máquina de escrever
- *  - retrato do falante (opcional, via mapa `portraits`)
- *  - altura dinâmica conforme o texto
- *  - lista de opções selecionáveis (setas + confirmar)
- *
- * Desenha no espaço SCREEN (alta resolução) — fontes nítidas.
- */
 class DialogueBox {
-
-    static TYPE_SPEED_MS = 24;       // ms por caractere
+    static TYPE_SPEED_MS = 24;       
     static PORTRAIT_SIZE = 72;
     static LINE_HEIGHT   = 20;
-
     constructor(canvas, ctx) {
         this.canvas = canvas;
         this.ctx    = ctx;
-
         this.active      = false;
         this.queue       = [];
         this.currentLine = '';
@@ -2599,23 +1838,11 @@ class DialogueBox {
         this.speaker     = '';
         this.timer       = 0;
         this.onComplete  = null;
-
-        // Opções de escolha
         this.options        = null;
         this.selectedOption = 0;
         this.onOptionSelect = null;
-
-        /** Retratos: { 'NomeDoFalante': { img, sx, sy, sw, sh } } */
         this.portraits = null;
     }
-
-    // ── API pública ──────────────────────────────────────────
-
-    /**
-     * Exibe uma sequência de falas.
-     * @param {Array<{speaker: string, text: string}>} lines
-     * @param {Function} [callback] — chamado ao terminar a última fala
-     */
     show(lines, callback) {
         this.queue      = [...lines];
         this.active     = true;
@@ -2623,44 +1850,29 @@ class DialogueBox {
         this.options    = null;
         this.nextLine();
     }
-
-    /**
-     * Exibe uma pergunta com alternativas.
-     * @param {string} speaker
-     * @param {string} text
-     * @param {string[]} options
-     * @param {(choiceIdx: number) => void} callback
-     */
     showChoices(speaker, text, options, callback) {
         this.active         = true;
         this.speaker        = speaker;
         this.currentLine    = text;
-        this.currentChar    = text.length;     // pergunta aparece inteira
+        this.currentChar    = text.length;     
         this.options        = options;
         this.selectedOption = 0;
         this.onOptionSelect = callback;
         this.queue          = [];
     }
-
     navigateOptions(dir) {
         if (!this.options || this.options.length === 0) return;
         const n = this.options.length;
         this.selectedOption = (this.selectedOption + dir + n) % n;
     }
-
     selectCurrentOption() {
         if (!this.options || this.options.length === 0) return;
         const choice   = this.selectedOption;
         const callback = this.onOptionSelect;
-
-        // Zera o estado ANTES do callback para evitar conflitos de input
         this.options = null;
         this.active  = false;
-
         if (callback) callback(choice);
     }
-
-    /** Avança: completa a digitação ou passa para a próxima fala. */
     advance() {
         if (!this.active) return;
         if (this.currentChar < this.currentLine.length) {
@@ -2669,7 +1881,6 @@ class DialogueBox {
             this.nextLine();
         }
     }
-
     nextLine() {
         if (this.queue.length === 0) {
             this.active = false;
@@ -2681,7 +1892,6 @@ class DialogueBox {
         this.currentLine = data.text;
         this.currentChar = 0;
     }
-
     update(dt) {
         if (!this.active) return;
         if (this.currentChar < this.currentLine.length) {
@@ -2692,23 +1902,16 @@ class DialogueBox {
             }
         }
     }
-
-    // ── Renderização ─────────────────────────────────────────
-
     draw() {
         if (!this.active) return;
-
         const ctx    = this.ctx;
         const margin = SPACE.md;
         const w      = this.canvas.width - margin * 2;
         const x      = margin;
-
         const portrait    = this.portraits ? this.portraits[this.speaker] : null;
         const hasPortrait = !!(portrait && portrait.img && portrait.img.complete);
         const textX       = hasPortrait ? x + DialogueBox.PORTRAIT_SIZE + SPACE.md + SPACE.sm : x + SPACE.md;
         const textW       = x + w - SPACE.md - textX;
-
-        // Altura dinâmica pelo texto completo (estável durante a digitação)
         ctx.font = font(TYPE.body);
         const lines   = wrapLines(ctx, this.currentLine, textW);
         const lineH   = DialogueBox.LINE_HEIGHT;
@@ -2716,14 +1919,12 @@ class DialogueBox {
         const minH    = hasPortrait ? DialogueBox.PORTRAIT_SIZE + SPACE.md + SPACE.sm : 96;
         const h       = Math.max(minH, textTop + lines.length * lineH + SPACE.sm);
         const y       = this.canvas.height - h - margin;
-
         this._drawPanel(ctx, x, y, w, h);
         if (hasPortrait) this._drawPortrait(ctx, portrait, x, y);
         this._drawSpeaker(ctx, textX, y);
         this._drawTypedText(ctx, lines, textX, y + textTop, lineH);
         if (this.options && this.options.length > 0) this._drawOptions(ctx, x, y, w);
     }
-
     _drawPanel(ctx, x, y, w, h) {
         ctx.fillStyle = COLORS.panel;
         ctx.fillRect(x, y, w, h);
@@ -2731,7 +1932,6 @@ class DialogueBox {
         ctx.lineWidth = 2.5;
         ctx.strokeRect(x, y, w, h);
     }
-
     _drawPortrait(ctx, portrait, x, y) {
         const ps = DialogueBox.PORTRAIT_SIZE;
         const px = x + SPACE.md - 4;
@@ -2743,19 +1943,17 @@ class DialogueBox {
         try {
             ctx.drawImage(portrait.img, portrait.sx, portrait.sy, portrait.sw, portrait.sh,
                           px, py, ps, ps);
-        } catch (_) { /* imagem inválida: segue sem retrato */ }
+        } catch (_) {  }
         ctx.strokeStyle = COLORS.gold;
         ctx.lineWidth = 1.5;
         ctx.strokeRect(px - 1.5, py - 1.5, ps + 3, ps + 3);
         ctx.restore();
     }
-
     _drawSpeaker(ctx, textX, y) {
         ctx.fillStyle = COLORS.gold;
         ctx.font = font(TYPE.label, { bold: true, mono: true });
         ctx.fillText(this.speaker.toUpperCase(), textX, y + 26);
     }
-
     _drawTypedText(ctx, lines, textX, startY, lineH) {
         ctx.fillStyle = COLORS.text;
         ctx.font = font(TYPE.body);
@@ -2764,26 +1962,22 @@ class DialogueBox {
         for (const line of lines) {
             if (remaining <= 0) break;
             ctx.fillText(line.substring(0, remaining), textX, y);
-            remaining -= line.length + 1;   // +1 pelo espaço consumido na quebra
+            remaining -= line.length + 1;   
             y += lineH;
         }
     }
-
     _drawOptions(ctx, x, y, w) {
         const rowH = 28;
         const optH = this.options.length * rowH + SPACE.md;
         const optY = y - optH - SPACE.sm;
-
         ctx.fillStyle = COLORS.panel;
         ctx.fillRect(x, optY, w, optH);
         ctx.strokeStyle = COLORS.gold;
         ctx.lineWidth = 2;
         ctx.strokeRect(x, optY, w, optH);
-
         this.options.forEach((opt, idx) => {
             const isSelected = idx === this.selectedOption;
             const rowY = optY + 22 + idx * rowH;
-
             if (isSelected) {
                 ctx.fillStyle = COLORS.goldSoft;
                 ctx.fillRect(x + 4, rowY - 17, w - 8, rowH - 4);
@@ -2795,37 +1989,23 @@ class DialogueBox {
     }
 }
 
-// ═══════ src/ui/InfoPanel.js ═══════
-
-/**
- * InfoPanel — HUD do progresso de coleta da fase atual.
- *
- * Canto superior direito: "📜 2/4" + dica do diário.
- * Ao completar: pulsa dourado e aponta o portal do Templo.
- */
 class InfoPanel {
-
     static NOTIFICATION_SECONDS = 3;
-
     constructor(canvas, ctx, gameState) {
         this.canvas    = canvas;
         this.ctx       = ctx;
         this.gameState = gameState;
         this.active    = false;
         this.timer     = 0;
-
         this.showNotification  = false;
         this.notificationTimer = 0;
         this.lastNotifiedInfo  = '';
     }
-
-    /** Notificação de nova informação coletada. */
     notifyNewInfo(infoTitle) {
         this.showNotification  = true;
         this.notificationTimer = InfoPanel.NOTIFICATION_SECONDS;
         this.lastNotifiedInfo  = infoTitle;
     }
-
     update(dt) {
         if (!this.active) return;
         this.timer += dt;
@@ -2834,51 +2014,41 @@ class InfoPanel {
             if (this.notificationTimer <= 0) this.showNotification = false;
         }
     }
-
     draw() {
         if (!this.active) return;
-
         const ctx     = this.ctx;
         const count   = this.gameState.getInfoCount();
         const total   = this.gameState.getRequiredInfoCount();
         const allDone = this.gameState.hasAllInfos();
-
         this._drawBadge(ctx, count, total, allDone);
         if (this.showNotification) this._drawNotification(ctx);
         if (allDone) this._drawTemploCall(ctx);
     }
-
     _drawBadge(ctx, count, total, allDone) {
         const w = 128, h = 40;
         const x = this.canvas.width - w - SPACE.md;
         const y = SPACE.sm;
-
         ctx.fillStyle = allDone ? 'rgba(180, 140, 40, 0.9)' : 'rgba(10, 10, 25, 0.85)';
         ctx.fillRect(x, y, w, h);
-
         ctx.strokeStyle = allDone
             ? `rgba(255, 215, 0, ${0.6 + Math.sin(this.timer * 4) * 0.3})`
             : COLORS.borderSoft;
         ctx.lineWidth = 2;
         ctx.strokeRect(x, y, w, h);
-
         ctx.fillStyle = allDone ? COLORS.text : COLORS.parchment;
         ctx.font = font(TYPE.label, { bold: true, mono: true });
         ctx.textAlign = 'center';
         ctx.fillText(`📜 ${count}/${total}`, x + w / 2, y + 26);
-
         ctx.fillStyle = 'rgba(245, 240, 232, 0.6)';
         ctx.font = font(TYPE.caption);
         ctx.fillText('J = diário', x + w / 2, y + h + 16);
         ctx.textAlign = 'left';
     }
-
     _drawNotification(ctx) {
         const alpha = Math.min(1, this.notificationTimer / 0.5);
         const w = 320, h = 52;
         const x = this.canvas.width - w - SPACE.md;
         const y = 78;
-
         ctx.save();
         ctx.globalAlpha = alpha;
         ctx.fillStyle = COLORS.panel;
@@ -2886,7 +2056,6 @@ class InfoPanel {
         ctx.strokeStyle = COLORS.gold;
         ctx.lineWidth = 1.5;
         ctx.strokeRect(x, y, w, h);
-
         ctx.textAlign = 'center';
         ctx.fillStyle = COLORS.gold;
         ctx.font = font(TYPE.caption, { bold: true });
@@ -2897,7 +2066,6 @@ class InfoPanel {
         ctx.restore();
         ctx.textAlign = 'left';
     }
-
     _drawTemploCall(ctx) {
         const pulse = 0.5 + Math.sin(this.timer * 3) * 0.3;
         ctx.save();
@@ -2911,28 +2079,10 @@ class InfoPanel {
     }
 }
 
-// ═══════ src/ui/JournalUI.js ═══════
 
-
-/**
- * JournalUI — Diário do Alex (tecla J).
- *
- * Uma página por ato/fase da história (Inconfidência, República, Lei
- * Áurea), navegável com ←/→ (ou A/D). Cada página reaproveita o mesmo
- * rótulo e cor de destaque já usados nas estátuas do Templo
- * (PhaseStatue.ACT_INFO), para manter a identidade visual consistente.
- *
- * Regra anti-spoiler: o selo FATO/BOATO de uma informação só é
- * revelado depois que o ato correspondente foi concluído; antes
- * disso a entrada aparece como "❓ NÃO VERIFICADO".
- *
- * Componente somente-leitura: deriva tudo do GameState.
- */
 class JournalUI {
-
     static ROW_HEIGHT = 22;
     static ACTS = [1, 2, 3];
-
     constructor(canvas, ctx, gameState) {
         this.canvas      = canvas;
         this.ctx         = ctx;
@@ -2942,7 +2092,6 @@ class JournalUI {
         this.selected    = 0;
         this.timer       = 0;
     }
-
     toggle() {
         this.active = !this.active;
         if (this.active) {
@@ -2950,38 +2099,26 @@ class JournalUI {
             this.selected = 0;
         }
     }
-
     close() {
         this.active = false;
     }
-
-    /** Navega entre as entradas da página atual. */
     navigate(dir) {
         const n = this._pageInfos().length;
         if (n === 0) return;
         this.selected = (this.selected + dir + n) % n;
     }
-
-    /** Vira a página do diário (ato anterior/seguinte). */
     navigatePage(dir) {
         const acts = JournalUI.ACTS;
         const idx  = acts.indexOf(this.currentPage);
         this.currentPage = acts[(idx + dir + acts.length) % acts.length];
         this.selected = 0;
     }
-
     update(dt) {
         this.timer += dt;
     }
-
-    // ── Estado derivado ──────────────────────────────────────
-
-    /** Informações coletadas pertencentes à página (ato) atual. */
     _pageInfos() {
         return this.gameState.collectedInfos.filter(i => this.gameState.getInfoAct(i) === this.currentPage);
     }
-
-    /** Selo exibido para uma info, respeitando a regra anti-spoiler. */
     _sealFor(info) {
         const act = this.gameState.getInfoAct(info);
         if (!this.gameState.isActCompleted(act)) {
@@ -2991,37 +2128,28 @@ class JournalUI {
             ? { label: '✔ FATO',  color: COLORS.success }
             : { label: '✘ BOATO', color: COLORS.danger };
     }
-
-    // ── Renderização ─────────────────────────────────────────
-
     draw() {
         if (!this.active) return;
-
         const ctx = this.ctx;
         const W   = this.canvas.width;
         const H   = this.canvas.height;
-
         ctx.fillStyle = COLORS.overlay;
         ctx.fillRect(0, 0, W, H);
         ctx.strokeStyle = COLORS.gold;
         ctx.lineWidth = 3;
         ctx.strokeRect(SPACE.md, SPACE.md, W - SPACE.md * 2, H - SPACE.md * 2);
-
         this._drawHeader(ctx, W);
         const listTop = this._drawPageTabs(ctx, W);
-
         const infos = this._pageInfos();
         if (infos.length === 0) {
             this._drawEmptyState(ctx, W, H);
             return;
         }
-
         if (this.selected >= infos.length) this.selected = infos.length - 1;
         const detailTop = this._drawEntryList(ctx, W, infos, listTop);
         this._drawDetail(ctx, W, H, infos[this.selected], detailTop);
         this._drawFooter(ctx, W, H);
     }
-
     _drawHeader(ctx, W) {
         ctx.textAlign = 'center';
         ctx.fillStyle = COLORS.gold;
@@ -3029,20 +2157,16 @@ class JournalUI {
         ctx.fillText('📖 Diário de Alex', W / 2, 38);
         ctx.textAlign = 'left';
     }
-
-    /** Abas de página (uma por ato); retorna o y onde o conteúdo da página começa. */
     _drawPageTabs(ctx, W) {
         const y = 50;
         const tabW = 168, tabH = 30, gap = 10;
         const totalW = tabW * 3 + gap * 2;
         const startX = W / 2 - totalW / 2;
-
         JournalUI.ACTS.forEach((act, i) => {
             const phase     = PhaseStatue.ACT_INFO[act];
             const x         = startX + i * (tabW + gap);
             const isCurrent = act === this.currentPage;
             const count     = this.gameState.collectedInfos.filter(inf => this.gameState.getInfoAct(inf) === act).length;
-
             if (isCurrent) {
                 ctx.fillStyle = 'rgba(255,255,255,0.08)';
                 ctx.fillRect(x, y, tabW, tabH);
@@ -3050,18 +2174,15 @@ class JournalUI {
             ctx.strokeStyle = isCurrent ? phase.accent : COLORS.borderSoft;
             ctx.lineWidth   = isCurrent ? 2 : 1;
             ctx.strokeRect(x, y, tabW, tabH);
-
             ctx.textAlign = 'center';
             ctx.fillStyle = isCurrent ? phase.accent : COLORS.textFaint;
             ctx.font = font(TYPE.caption, { bold: isCurrent });
             const shortLabel = phase.label.split(' — ')[0];
             ctx.fillText(`${shortLabel} (${count})`, x + tabW / 2, y + tabH / 2 + 4);
         });
-
         ctx.textAlign = 'left';
         return y + tabH + 18;
     }
-
     _drawEmptyState(ctx, W, H) {
         ctx.textAlign = 'center';
         ctx.fillStyle = COLORS.textFaint;
@@ -3072,54 +2193,42 @@ class JournalUI {
         ctx.fillText('←/→ trocar de página   •   J fechar', W / 2, H - 34);
         ctx.textAlign = 'left';
     }
-
-    /** Lista de entradas da página atual; retorna o y onde o painel de detalhe começa. */
     _drawEntryList(ctx, W, infos, listY) {
         const rowH = JournalUI.ROW_HEIGHT;
-
         infos.forEach((info, idx) => {
             const y     = listY + idx * rowH;
             const isSel = idx === this.selected;
             const seal  = this._sealFor(info);
-
             if (isSel) {
                 ctx.fillStyle = COLORS.goldSoft;
                 ctx.fillRect(SPACE.lg, y - 16, W - SPACE.lg * 2, rowH - 3);
             }
-
             ctx.font = font(TYPE.caption, { bold: true });
             ctx.fillStyle = seal.color;
             ctx.fillText(seal.label, SPACE.lg + 6, y);
-
             ctx.font = font(TYPE.body, { bold: isSel });
             ctx.fillStyle = isSel ? COLORS.highlight : COLORS.parchment;
             const title = info.title.length > 40 ? `${info.title.slice(0, 39)}…` : info.title;
             ctx.fillText((isSel ? '➤ ' : '   ') + title, 190, y);
         });
-
         return listY + infos.length * rowH + SPACE.sm;
     }
-
     _drawDetail(ctx, W, H, info, top) {
         const x = SPACE.lg;
         const w = W - SPACE.lg * 2;
         const h = Math.max(H - top - 52, 60);
-
         ctx.strokeStyle = COLORS.borderSoft;
         ctx.lineWidth = 1.5;
         ctx.strokeRect(x, top, w, h);
-
         ctx.fillStyle = COLORS.textFaint;
         ctx.font = font(TYPE.caption, { italic: true });
         ctx.fillText(`Contado por: ${info.npc || '???'}`, x + SPACE.sm, top + 20);
-
         ctx.fillStyle = COLORS.text;
         ctx.font = font(TYPE.body);
         const maxLines = Math.max(1, Math.floor((h - 30) / 20));
         const lines = wrapLines(ctx, info.shortText || info.title, w - SPACE.md * 2).slice(0, maxLines);
         drawLines(ctx, lines, x + SPACE.sm, top + 42, 20);
     }
-
     _drawFooter(ctx, W, H) {
         ctx.fillStyle = COLORS.neutral;
         ctx.font = font(TYPE.caption);
@@ -3129,64 +2238,39 @@ class JournalUI {
     }
 }
 
-// ═══════ src/ui/ReturnButton.js ═══════
-
-/**
- * ReturnButton — botão fixo "Voltar ao Templo" exibido durante as fases.
- *
- * Acionável por clique/toque ou pela tecla T (atalho exibido no rótulo).
- * O componente só desenha e testa hits; a ação fica com o chamador (main).
- */
 class ReturnButton {
-
     static LABEL = '🏛️ Templo (T)';
-
     constructor(canvas, ctx) {
         this.canvas  = canvas;
         this.ctx     = ctx;
         this.visible = false;
         this.hovered = false;
-
-        // Geometria fixa (espaço SCREEN), canto superior esquerdo
         this.x = SPACE.sm;
         this.y = SPACE.sm;
         this.w = 150;
         this.h = 34;
     }
-
-    /** @param {boolean} value */
     setVisible(value) {
         this.visible = value;
         if (!value) this.hovered = false;
     }
-
-    /**
-     * Testa se um ponto (espaço SCREEN) está sobre o botão.
-     * @returns {boolean}
-     */
     hitTest(px, py) {
         return this.visible &&
                px >= this.x && px <= this.x + this.w &&
                py >= this.y && py <= this.y + this.h;
     }
-
-    /** Atualiza o estado de hover (para feedback visual). */
     setHover(px, py) {
         this.hovered = this.hitTest(px, py);
     }
-
     draw() {
         if (!this.visible) return;
         const ctx = this.ctx;
-
         ctx.save();
         ctx.fillStyle = this.hovered ? 'rgba(60, 45, 20, 0.95)' : 'rgba(10, 10, 25, 0.85)';
         ctx.fillRect(this.x, this.y, this.w, this.h);
-
         ctx.strokeStyle = this.hovered ? COLORS.highlight : COLORS.gold;
         ctx.lineWidth = this.hovered ? 2.5 : 1.5;
         ctx.strokeRect(this.x, this.y, this.w, this.h);
-
         ctx.fillStyle = this.hovered ? COLORS.highlight : COLORS.parchment;
         ctx.font = font(TYPE.caption, { bold: true });
         ctx.textAlign = 'center';
@@ -3198,45 +2282,27 @@ class ReturnButton {
     }
 }
 
-// ═══════ src/ui/PuzzleUI.js ═══════
-
-/**
- * PuzzleUI — o Desafio de Arasy.
- *
- * O jogador escolhe, entre as informações coletadas na fase ATUAL,
- * qual deu INÍCIO e qual marcou o FIM do movimento histórico.
- *
- * Interação por mouse (hover + clique). As tentativas restantes são
- * informadas pelo chamador via `setAttemptsLeft` e apenas exibidas aqui.
- */
 class PuzzleUI {
-
     constructor(canvas, ctx, gameState) {
         this.canvas    = canvas;
         this.ctx       = ctx;
         this.gameState = gameState;
-
         this.active        = false;
-        this.phase         = 'intro';   // 'intro' | 'select_start' | 'select_end' | 'result'
+        this.phase         = 'intro';   
         this.selectedStart = null;
         this.selectedEnd   = null;
-        this.result        = null;      // 'correct' | 'wrong'
+        this.result        = null;      
         this.resultTimer   = 0;
-        this.attemptsLeft  = null;      // exibição opcional
-
+        this.attemptsLeft  = null;      
         this.onCorrect = null;
         this.onWrong   = null;
-
         this.hoveredCard = -1;
         this._onMouseMove = this._handleMouseMove.bind(this);
         this._onClick     = this._handleClick.bind(this);
     }
-
-    /** Informa quantas tentativas restam (apenas exibição). */
     setAttemptsLeft(n) {
         this.attemptsLeft = n;
     }
-
     start(onCorrect, onWrong) {
         this.active        = true;
         this.phase         = 'intro';
@@ -3247,28 +2313,20 @@ class PuzzleUI {
         this.onCorrect     = onCorrect;
         this.onWrong       = onWrong;
         this.hoveredCard   = -1;
-
         this.canvas.addEventListener('mousemove', this._onMouseMove);
         this.canvas.addEventListener('click', this._onClick);
     }
-
     stop() {
         this.active = false;
         this.canvas.removeEventListener('mousemove', this._onMouseMove);
         this.canvas.removeEventListener('click', this._onClick);
     }
-
-    /** As cartas vêm SEMPRE da fase atual (nunca de atos anteriores). */
     _getInfos() {
         return this.gameState.getCurrentActInfos();
     }
-
-    // ── Layout das cartas ────────────────────────────────────
-
     _getCardRects() {
         const infos = this._getInfos();
         let cardW, cardH, gapX, gapY, cols, startY;
-
         if (infos.length <= 4) {
             cardW = 280; cardH = 130; gapX = 20; gapY = 20; cols = 2; startY = 160;
         } else if (infos.length <= 6) {
@@ -3276,10 +2334,8 @@ class PuzzleUI {
         } else {
             cardW = 140; cardH = 116; gapX = 12; gapY = 12; cols = 4; startY = 140;
         }
-
         const totalW = cols * cardW + (cols - 1) * gapX;
         const startX = (this.canvas.width - totalW) / 2;
-
         return infos.map((info, i) => ({
             x: startX + (i % cols) * (cardW + gapX),
             y: startY + Math.floor(i / cols) * (cardH + gapY),
@@ -3288,9 +2344,6 @@ class PuzzleUI {
             info,
         }));
     }
-
-    // ── Mouse ────────────────────────────────────────────────
-
     _canvasPoint(e) {
         const rect = this.canvas.getBoundingClientRect();
         return {
@@ -3298,17 +2351,14 @@ class PuzzleUI {
             y: (e.clientY - rect.top) * (this.canvas.height / rect.height),
         };
     }
-
     _handleMouseMove(e) {
         if (!this.active || this.phase === 'intro' || this.phase === 'result') return;
         const { x, y } = this._canvasPoint(e);
         this.hoveredCard = this._getCardRects().findIndex(c =>
             x >= c.x && x <= c.x + c.w && y >= c.y && y <= c.y + c.h);
     }
-
     _handleClick() {
         if (!this.active) return;
-
         if (this.phase === 'intro') {
             this.phase = 'select_start';
             return;
@@ -3320,7 +2370,6 @@ class PuzzleUI {
             return;
         }
         if (this.hoveredCard < 0) return;
-
         const selected = this._getCardRects()[this.hoveredCard].info;
         if (this.phase === 'select_start') {
             this.selectedStart = selected;
@@ -3334,31 +2383,24 @@ class PuzzleUI {
             this.resultTimer = 0;
         }
     }
-
     update(dt) {
         if (this.active && this.phase === 'result') this.resultTimer += dt;
     }
-
-    // ── Renderização ─────────────────────────────────────────
-
     draw() {
         if (!this.active) return;
         const ctx = this.ctx;
         const W = this.canvas.width;
         const H = this.canvas.height;
-
         ctx.fillStyle = 'rgba(8, 6, 15, 0.96)';
         ctx.fillRect(0, 0, W, H);
         ctx.strokeStyle = 'rgba(200, 170, 100, 0.15)';
         ctx.lineWidth = 1.5;
         ctx.strokeRect(SPACE.md + 4, SPACE.md + 4, W - 40, H - 40);
         ctx.strokeRect(SPACE.lg + 4, SPACE.lg + 4, W - 56, H - 56);
-
         if (this.phase === 'intro') this._drawIntro(ctx, W, H);
         else if (this.phase === 'result') this._drawResult(ctx, W, H);
         else this._drawSelection(ctx, W, H);
     }
-
     _drawAttempts(ctx, W) {
         if (this.attemptsLeft == null) return;
         ctx.textAlign = 'right';
@@ -3367,13 +2409,11 @@ class PuzzleUI {
         ctx.fillText(`Tentativas: ${'❤'.repeat(Math.max(0, this.attemptsLeft))}`, W - 36, 46);
         ctx.textAlign = 'left';
     }
-
     _drawIntro(ctx, W, H) {
         ctx.textAlign = 'center';
         ctx.fillStyle = COLORS.gold;
         ctx.font = font(26, { bold: true });
         ctx.fillText('🏛️  O DESAFIO DE ARASY  🏛️', W / 2, 110);
-
         ctx.fillStyle = COLORS.parchment;
         ctx.font = font(17);
         const lines = [
@@ -3388,18 +2428,14 @@ class PuzzleUI {
             'Fake news também existiam no passado!',
         ];
         lines.forEach((line, i) => ctx.fillText(line, W / 2, 170 + i * 28));
-
         this._drawAttempts(ctx, W);
-
         ctx.fillStyle = COLORS.gold;
         ctx.font = font(18, { bold: true });
         ctx.fillText('[ Clique para continuar ]', W / 2, H - 50);
         ctx.textAlign = 'left';
     }
-
     _drawSelection(ctx, W, H) {
         const isStart = this.phase === 'select_start';
-
         ctx.textAlign = 'center';
         ctx.fillStyle = COLORS.gold;
         ctx.font = font(19, { bold: true });
@@ -3407,39 +2443,32 @@ class PuzzleUI {
             isStart ? 'Selecione a informação que DEU INÍCIO ao movimento:'
                     : 'Selecione a informação que ENCERROU o movimento:',
             W / 2, 66);
-
         if (!isStart) {
             ctx.fillStyle = COLORS.successSoft;
             ctx.font = font(15);
             ctx.fillText(`✅ Início: ${this.selectedStart.title}`, W / 2, 100);
         }
         this._drawAttempts(ctx, W);
-
         for (const [i, c] of this._getCardRects().entries()) {
             this._drawCard(ctx, c, i === this.hoveredCard,
                 this.selectedStart && c.info.id === this.selectedStart.id);
         }
         ctx.textAlign = 'left';
     }
-
     _drawCard(ctx, c, isHovered, isSelected) {
         ctx.fillStyle = isSelected ? 'rgba(100, 200, 100, 0.2)'
                       : isHovered  ? COLORS.goldSoft
                       : COLORS.panelSoft;
         ctx.fillRect(c.x, c.y, c.w, c.h);
-
         ctx.strokeStyle = isHovered ? COLORS.gold : COLORS.borderSoft;
         ctx.lineWidth = isHovered ? 3 : 1.5;
         ctx.strokeRect(c.x, c.y, c.w, c.h);
-
         const compact = c.w < 180;
         const cxm = c.x + c.w / 2;
-
         ctx.textAlign = 'center';
         ctx.fillStyle = COLORS.gold;
         ctx.font = font(compact ? 11 : 13, { bold: true, mono: true });
         ctx.fillText(c.info.npc.toUpperCase(), cxm, c.y + (compact ? 18 : 22));
-
         ctx.fillStyle = COLORS.parchment;
         ctx.font = font(compact ? 13 : 15, { bold: true });
         let y = c.y + (compact ? 36 : 44);
@@ -3447,7 +2476,6 @@ class PuzzleUI {
             ctx.fillText(line, cxm, y);
             y += compact ? 14 : 17;
         }
-
         ctx.fillStyle = COLORS.textDim;
         ctx.font = font(compact ? 11 : 12.5);
         y += 2;
@@ -3455,31 +2483,24 @@ class PuzzleUI {
             ctx.fillText(line, cxm, y);
             y += compact ? 12.5 : 15;
         }
-
         if (isSelected) {
             ctx.fillStyle = COLORS.success;
             ctx.font = font(compact ? 16 : 20, { bold: true });
             ctx.fillText('✅', c.x + c.w - 18, c.y + 22);
         }
     }
-
     _drawResult(ctx, W, H) {
         const isCorrect = this.result === 'correct';
-
         ctx.textAlign = 'center';
         ctx.font = font(64);
         ctx.fillText(isCorrect ? '🎉' : '❌', W / 2, 140);
-
         ctx.fillStyle = isCorrect ? COLORS.success : COLORS.danger;
         ctx.font = font(26, { bold: true });
         ctx.fillText(isCorrect ? 'PARABÉNS!' : 'ERRADO!', W / 2, 190);
-
         ctx.fillStyle = COLORS.parchment;
         ctx.font = font(16);
-
         const lines = isCorrect ? this._buildSuccessLines() : this._buildFailLines();
         lines.forEach((line, i) => ctx.fillText(line, W / 2, 232 + i * 24));
-
         if (this.resultTimer > 1.2) {
             ctx.fillStyle = COLORS.gold;
             ctx.font = font(18, { bold: true });
@@ -3487,7 +2508,6 @@ class PuzzleUI {
         }
         ctx.textAlign = 'left';
     }
-
     _buildSuccessLines() {
         const isRio = this.selectedStart.id.startsWith('republica');
         const isLei = this.selectedStart.id.startsWith('leiaurea');
@@ -3515,7 +2535,6 @@ class PuzzleUI {
             'A névoa de mentiras foi dissipada!',
         ];
     }
-
     _buildFailLines() {
         const lines = [
             'As informações selecionadas não estão corretas.',
@@ -3534,24 +2553,12 @@ class PuzzleUI {
     }
 }
 
-// ═══════ src/ui/TutorialOverlay.js ═══════
-
-/**
- * TutorialOverlay — faixa de tutorial da Biblioteca.
- *
- * Passos:
- *  0 — mover (desaparece ao mover)
- *  1 — interagir (desaparece ao interagir)
- *  2 — falar com a Professora (desaparece ao falar)
- */
 class TutorialOverlay {
-
     static STEPS = Object.freeze([
         { text: '🎮  Use  WASD  ou  ←↑↓→  para mover' },
         { text: '💬  Pressione  E  para interagir' },
         { text: '📋  Fale com a Professora sobre o trabalho' },
     ]);
-
     constructor(canvas, ctx) {
         this.canvas = canvas;
         this.ctx    = ctx;
@@ -3560,7 +2567,6 @@ class TutorialOverlay {
         this.alpha  = 1;
         this.timer  = 0;
     }
-
     setStep(step) {
         if (step > this.step) {
             this.step  = step;
@@ -3569,37 +2575,27 @@ class TutorialOverlay {
         }
         if (this.step >= TutorialOverlay.STEPS.length) this.active = false;
     }
-
     complete() {
         this.active = false;
     }
-
     update(dt) {
         if (!this.active) return;
         this.timer += dt;
         this.alpha = 0.7 + Math.sin(this.timer * 2) * 0.15;
     }
-
     draw() {
         if (!this.active || this.step >= TutorialOverlay.STEPS.length) return;
-
         const ctx = this.ctx;
         const w = this.canvas.width;
         const bandH = 56;
-
-        // Faixa superior
         ctx.fillStyle = 'rgba(0, 0, 0, 0.68)';
         ctx.fillRect(0, 0, w, bandH);
-
-        // Borda inferior com brilho
         const grad = ctx.createLinearGradient(0, bandH - 3, w, bandH - 3);
         grad.addColorStop(0, 'rgba(239, 159, 39, 0)');
         grad.addColorStop(0.5, 'rgba(239, 159, 39, 0.6)');
         grad.addColorStop(1, 'rgba(239, 159, 39, 0)');
         ctx.fillStyle = grad;
         ctx.fillRect(0, bandH - 3, w, 3);
-
-        // Texto do passo
         ctx.save();
         ctx.globalAlpha = this.alpha;
         ctx.fillStyle = COLORS.parchment;
@@ -3607,8 +2603,6 @@ class TutorialOverlay {
         ctx.textAlign = 'center';
         ctx.fillText(TutorialOverlay.STEPS[this.step].text, w / 2, 32);
         ctx.restore();
-
-        // Indicador de progresso
         const dotY = 46;
         const spacing = 16;
         const startX = w / 2 - (TutorialOverlay.STEPS.length * spacing) / 2 + spacing / 2;
@@ -3622,19 +2616,6 @@ class TutorialOverlay {
     }
 }
 
-// ═══════ src/ui/EndingScreen.js ═══════
-
-/**
- * EndingScreen — tela final do jogo (créditos + resumo da jornada).
- *
- * Aparece depois da sequência narrativa final no Templo (cena "vitoria"),
- * para que o jogador não fique andando livremente sem propósito ao
- * concluir a aventura. Não há menu principal no jogo, então esta tela
- * oferece a única ação possível depois do fim: recomeçar a jornada.
- *
- * Somente leitura: deriva o resumo do GameState (fatos vs. boatos
- * distinguidos ao longo dos 3 atos).
- */
 class EndingScreen {
     constructor(canvas, ctx, gameState) {
         this.canvas    = canvas;
@@ -3643,73 +2624,56 @@ class EndingScreen {
         this.active    = false;
         this.timer     = 0;
     }
-
     show() {
         this.active = true;
         this.timer  = 0;
     }
-
     hide() {
         this.active = false;
     }
-
     update(dt) {
         if (this.active) this.timer += dt;
     }
-
     draw() {
         if (!this.active) return;
-
         const ctx = this.ctx;
         const W   = this.canvas.width;
         const H   = this.canvas.height;
-
         ctx.fillStyle = COLORS.overlay;
         ctx.fillRect(0, 0, W, H);
         ctx.strokeStyle = COLORS.gold;
         ctx.lineWidth = 3;
         ctx.strokeRect(SPACE.md, SPACE.md, W - SPACE.md * 2, H - SPACE.md * 2);
-
         ctx.textAlign = 'center';
-
         ctx.fillStyle = COLORS.gold;
         ctx.font = font(TYPE.hero, { bold: true });
         ctx.fillText('🏛️ Ecos do Brasil', W / 2, 66);
-
         ctx.fillStyle = COLORS.parchment;
         ctx.font = font(TYPE.label, { italic: true });
         ctx.fillText('Fim da jornada de Alex', W / 2, 92);
-
         this._drawSummary(ctx, W);
         this._drawRecap(ctx, W);
         this._drawCredits(ctx, W, H);
         this._drawPrompt(ctx, W, H);
-
         ctx.textAlign = 'left';
     }
-
-    /** Fatos separados de boatos ao longo dos 3 atos — não é resetado ao terminar. */
     _drawSummary(ctx, W) {
         const infos = this.gameState.collectedInfos;
         const facts = infos.filter(i => i.isTrue).length;
         const myths = infos.filter(i => !i.isTrue).length;
-
         ctx.fillStyle = COLORS.highlight;
         ctx.font = font(TYPE.body, { bold: true });
         ctx.fillText(`✔ ${facts} fatos confirmados   •   ✘ ${myths} boatos desmentidos`, W / 2, 122);
     }
-
     _drawRecap(ctx, W) {
         const recap = 'Em Vila Rica, Rio de Janeiro e São Paulo, Alex aprendeu que a história ' +
             'de verdade é feita de gente real, decisões difíceis e consequências que duram gerações — ' +
             'muito diferente dos boatos que tentam simplificar ou distorcer o passado.';
-
         ctx.fillStyle = COLORS.textDim;
         ctx.font = font(TYPE.body);
         const lines = wrapLines(ctx, recap, W - SPACE.xl * 2);
         drawLines(ctx, lines, W / 2, 156, 22);
     }
-
     _drawCredits(ctx, W, H) {
         const y = H - 92;
         ctx.fillStyle = COLORS.textFaint;
@@ -3717,7 +2681,6 @@ class EndingScreen {
         ctx.fillText('Ecos do Brasil — desenvolvido em JavaScript puro, com Tiled e Canvas 2D.', W / 2, y);
         ctx.fillText('Obrigado por jogar e por defender a verdade histórica.', W / 2, y + 20);
     }
-
     _drawPrompt(ctx, W, H) {
         const pulse = 0.55 + Math.sin(this.timer * 3) * 0.3;
         ctx.save();
@@ -3729,17 +2692,7 @@ class EndingScreen {
     }
 }
 
-// ═══════ src/ui/ControlsScreen.js ═══════
-
-/**
- * ControlsScreen — tela de ajuda com todos os comandos do jogo (tecla H).
- *
- * Referência estática, consultável a qualquer momento (exceto durante
- * diálogos/desafios), para que o jogador sempre saiba quais teclas usar.
- * Segue o mesmo padrão visual do JournalUI/EndingScreen.
- */
 class ControlsScreen {
-
     static CONTROLS = [
         { keys: 'W A S D  /  ← ↑ → ↓', action: 'Mover Alex pelo mapa' },
         { keys: 'ESPAÇO  ou  E',       action: 'Interagir / avançar diálogo' },
@@ -3751,74 +2704,59 @@ class ControlsScreen {
         { keys: 'M',                   action: 'Ativar ou desativar o som' },
         { keys: 'H',                   action: 'Abrir ou fechar esta tela de ajuda' },
     ];
-
     constructor(canvas, ctx) {
         this.canvas = canvas;
         this.ctx    = ctx;
         this.active = false;
         this.timer  = 0;
     }
-
     toggle() {
         this.active = !this.active;
         this.timer  = 0;
     }
-
     close() {
         this.active = false;
     }
-
     update(dt) {
         if (this.active) this.timer += dt;
     }
-
     draw() {
         if (!this.active) return;
-
         const ctx = this.ctx;
         const W   = this.canvas.width;
         const H   = this.canvas.height;
-
         ctx.fillStyle = COLORS.overlay;
         ctx.fillRect(0, 0, W, H);
         ctx.strokeStyle = COLORS.gold;
         ctx.lineWidth = 3;
         ctx.strokeRect(SPACE.md, SPACE.md, W - SPACE.md * 2, H - SPACE.md * 2);
-
         ctx.textAlign = 'center';
         ctx.fillStyle = COLORS.gold;
         ctx.font = font(TYPE.title, { bold: true });
         ctx.fillText('🎮 Controles', W / 2, 46);
         ctx.textAlign = 'left';
-
         this._drawRows(ctx, W);
         this._drawPrompt(ctx, W, H);
     }
-
     _drawRows(ctx, W) {
         const rowH    = 34;
         const startY  = 92;
         const keyX    = SPACE.xl;
         const actionX = W / 2 - 20;
-
         ControlsScreen.CONTROLS.forEach((c, i) => {
             const y = startY + i * rowH;
-
             if (i % 2 === 0) {
                 ctx.fillStyle = 'rgba(255,255,255,0.04)';
                 ctx.fillRect(SPACE.lg, y - 20, W - SPACE.lg * 2, rowH - 4);
             }
-
             ctx.fillStyle = COLORS.highlight;
             ctx.font = font(TYPE.body, { bold: true, mono: true });
             ctx.fillText(c.keys, keyX, y);
-
             ctx.fillStyle = COLORS.parchment;
             ctx.font = font(TYPE.body);
             ctx.fillText(c.action, actionX, y);
         });
     }
-
     _drawPrompt(ctx, W, H) {
         const pulse = 0.55 + Math.sin(this.timer * 3) * 0.3;
         ctx.save();
@@ -3832,7 +2770,6 @@ class ControlsScreen {
     }
 }
 
-// ═══════ src/main.js ═══════
 
 
 
@@ -3855,21 +2792,15 @@ class ControlsScreen {
 
 
 
-
-// ═══════════════════════════════════════════════════════════════
-// CANVAS & SISTEMAS GLOBAIS
-// ═══════════════════════════════════════════════════════════════
 const canvas = document.getElementById('gameCanvas');
 const ctx    = canvas.getContext('2d');
 canvas.width  = SCREEN.W;
 canvas.height = SCREEN.H;
-
 const input        = new Input();
 const camera       = new Camera(VIEW.W, VIEW.H);
 const sceneManager = new SceneManager(canvas, ctx);
 const gameState    = new GameState();
 const audio        = new AudioManager();
-
 let gameMap       = null;
 let alex          = null;
 let dialogueBox   = null;
@@ -3891,17 +2822,11 @@ let jWasDown      = false;
 let tWasDown      = false;
 let hWasDown      = false;
 let gameReady     = false;
-let nextSpawnDoor = null;   // porta para respawn inteligente (ex.: 'porta_cambio')
+let nextSpawnDoor = null;   
 let currentSceneName   = 'biblioteca';
 let lastSavedInfoCount = 0;
 let puzzleChancesLeft  = 3;
-
-// Debug (F3)
 let debugMode = false;
-
-// ═══════════════════════════════════════════════════════════════
-// CONFIGURAÇÃO DECLARATIVA DOS ATOS
-// ═══════════════════════════════════════════════════════════════
 const ACTS = Object.freeze({
     1: {
         scene : 'vila_rica',
@@ -3952,23 +2877,11 @@ const ACTS = Object.freeze({
         ],
     },
 });
-
-/** Cenas em que o botão "Voltar ao Templo" fica disponível. */
 const SCENES_WITH_RETURN = new Set([
     'vila_rica', 'cambio', 'igreja', 'taverna', 'rio_de_janeiro', 'sao_paulo',
 ]);
-
 const PUZZLE_MAX_CHANCES = 3;
-
-/**
- * Folga (px por lado) da área de detecção de TODAS as portas/transições de mapa.
- * Expande a caixa de detecção ao redor da posição real da porta para que o
- * "Pressione E para entrar" seja reconhecido ao chegar perto de qualquer
- * direção razoável, sem exigir alinhamento pixel-perfeito.
- */
 const DOOR_DETECT_PAD = 16;
-
-// Música por cena
 const MUSIC_BY_SCENE = {
     biblioteca     : 'musica_biblioteca',
     templo         : 'musica_templo',
@@ -3980,16 +2893,11 @@ const MUSIC_BY_SCENE = {
     sao_paulo      : 'musica_sao_paulo',
     vitoria        : 'musica_vitoria',
 };
-
-// ═══════════════════════════════════════════════════════════════
-// ENTRADA GLOBAL (teclado/mouse)
-// ═══════════════════════════════════════════════════════════════
 window.addEventListener('keydown', e => {
     audio.unlock();
     if (e.code === 'F3')   { debugMode = !debugMode; e.preventDefault(); }
     if (e.code === 'KeyM') audio.toggleMute();
 });
-
 canvas.addEventListener('click', e => {
     if (!gameReady || !returnButton) return;
     const p = canvasPoint(e);
@@ -3997,14 +2905,11 @@ canvas.addEventListener('click', e => {
         goToTemplo();
     }
 });
-
 canvas.addEventListener('mousemove', e => {
     if (!gameReady || !returnButton) return;
     const p = canvasPoint(e);
     returnButton.setHover(p.x, p.y);
 });
-
-/** Converte coordenadas de mouse para o espaço do canvas. */
 function canvasPoint(e) {
     const rect = canvas.getBoundingClientRect();
     return {
@@ -4012,20 +2917,14 @@ function canvasPoint(e) {
         y: (e.clientY - rect.top) * (canvas.height / rect.height),
     };
 }
-
 function canUseReturnButton() {
     return returnButton.visible && !dialogueBox.active &&
            !puzzleUI.active && !journal.active && !sceneManager.transitioning;
 }
-
 function goToTemplo() {
     audio.playSfx('sfx_confirm');
     loadScene('templo');
 }
-
-// ═══════════════════════════════════════════════════════════════
-// ESCALA RESPONSIVA (preenche a janela, mantém proporção)
-// ═══════════════════════════════════════════════════════════════
 function resizeCanvas() {
     const k = Math.max(0.5, Math.min(
         window.innerWidth  / canvas.width,
@@ -4036,14 +2935,8 @@ function resizeCanvas() {
 }
 window.addEventListener('resize', resizeCanvas);
 resizeCanvas();
-
-// ═══════════════════════════════════════════════════════════════
-// REGISTRO DE IMAGENS
-// ═══════════════════════════════════════════════════════════════
 const IMAGES = {};
-
 const IMAGE_SOURCES = {
-    // Tilesets
     'Library sprite sheet-00'     : './assets/sprites/tilesets/Library sprite sheet-00.png',
     'atlas_32x'                   : './assets/sprites/tilesets/interior.png',
     'atlas_16x'                   : './assets/sprites/tilesets/overworld.png',
@@ -4051,8 +2944,6 @@ const IMAGE_SOURCES = {
     'atlzzas'                     : './assets/sprites/tilesets/market.png',
     'GothicFurnitureSprites48x48' : './assets/sprites/tilesets/GothicFurnitureSprites48x48.png',
     'interior16'                  : './assets/sprites/tilesets/interior16.png',
-
-    // Tilesets (basename match)
     'exterior'     : './assets/sprites/tilesets/exterior.png',
     'farming'      : './assets/sprites/tilesets/farming.png',
     'interior'     : './assets/sprites/tilesets/interior.png',
@@ -4061,15 +2952,10 @@ const IMAGE_SOURCES = {
     'download (1)' : './assets/sprites/tilesets/download (1).png',
     'download'     : './assets/sprites/tilesets/download.png',
     'republica'    : './assets/sprites/tilesets/republica.png',
-
-    // Player
     'player'     : './assets/sprites/personagens/Player.png',
     'playerLeft' : './assets/sprites/personagens/PlayerLeft.png',
-
-    // NPCs (Characters_V3: grade 16x16, 1 personagem por linha, colunas 4-5 = frente)
     'characters' : './assets/sprites/npcs/Characters_V3_Colour.png',
 };
-
 function loadImage(src) {
     return new Promise(resolve => {
         const img = new Image();
@@ -4078,19 +2964,13 @@ function loadImage(src) {
         img.src = src;
     });
 }
-
 async function loadAllImages() {
     const entries = Object.entries(IMAGE_SOURCES);
     const results = await Promise.all(entries.map(([, src]) => loadImage(src)));
     entries.forEach(([key], i) => { if (results[i]) IMAGES[key] = results[i]; });
     console.log(`📦 ${Object.keys(IMAGES).length} imagens carregadas`);
 }
-
-// ═══════════════════════════════════════════════════════════════
-// CARREGAMENTO DE MAPA
-// ═══════════════════════════════════════════════════════════════
 async function fetchMap(filename) {
-    // Mapas embutidos (permite abrir o jogo por file://, sem servidor)
     if (window.EMBEDDED_MAPS && window.EMBEDDED_MAPS[filename]) {
         return window.EMBEDDED_MAPS[filename];
     }
@@ -4098,14 +2978,9 @@ async function fetchMap(filename) {
     if (!resp.ok) throw new Error(`HTTP ${resp.status} — ${filename}`);
     return resp.json();
 }
-
 function buildMap(mapData) {
     return new Map(mapData, IMAGES);
 }
-
-// ═══════════════════════════════════════════════════════════════
-// SPRITES DOS NPCs (Characters_V3_Colour.png — 1 personagem/linha)
-// ═══════════════════════════════════════════════════════════════
 const CHAR_ROWS = {
     trabalhador : 0,
     velho       : 1,
@@ -4123,8 +2998,6 @@ const CHAR_ROWS = {
     moreno      : 17,
     dama_flor   : 19,
 };
-
-/** Config de sprite p/ NPC; retorna {} se a sheet não carregou (fallback). */
 function charSprite(rowName) {
     const row = CHAR_ROWS[rowName];
     if (row === undefined || !IMAGES['characters']) return {};
@@ -4137,12 +3010,6 @@ function charSprite(rowName) {
         width: 16, height: 16,
     };
 }
-
-// ═══════════════════════════════════════════════════════════════
-// FLUXO DO TEMPLO (puzzle com chances + retorno automático)
-// ═══════════════════════════════════════════════════════════════
-
-/** Diálogo padrão de Arasy quando ainda faltam informações; devolve à fase. */
 function buildArasyIncomplete(act) {
     const total = gameState.getRequiredInfoCount();
     return {
@@ -4154,33 +3021,27 @@ function buildArasyIncomplete(act) {
         onDone: () => loadScene(ACTS[act].scene),
     };
 }
-
-/** Inicia (ou reinicia) o puzzle do ato atual respeitando as chances. */
 function startPuzzleWithChances() {
     puzzleUI.setAttemptsLeft(puzzleChancesLeft);
     puzzleUI.start(onPuzzleCorrect, onPuzzleWrong);
 }
-
 function onPuzzleCorrect() {
     audio.playSfx('sfx_confirm');
     const act = gameState.act;
     gameState.completeCurrentAct();
-
     dialogueBox.show(ACTS[act].successLines, () => {
         if (act < 3) {
             gameState.act = act + 1;
             loadScene(ACTS[gameState.act].scene);
         } else {
-            loadScene('biblioteca'); // professora aguarda o quiz final
+            loadScene('biblioteca'); 
         }
     });
     SaveSystem.save(gameState, currentSceneName);
 }
-
 function onPuzzleWrong() {
     audio.playSfx('sfx_error');
     puzzleChancesLeft--;
-
     if (puzzleChancesLeft > 0) {
         dialogueBox.show([
             { speaker: 'Arasy', text: `A névoa embaralhou o tempo... Ainda lhe restam ${puzzleChancesLeft} tentativa(s).` },
@@ -4188,22 +3049,17 @@ function onPuzzleWrong() {
         ], startPuzzleWithChances);
         return;
     }
-
-    // Chances esgotadas: perde as infos da fase e volta para recoletá-las
     gameState.clearCurrentActInfos();
     dialogueBox.show([
         { speaker: 'Arasy', text: 'A névoa venceu desta vez... e as memórias se dispersaram como fumaça.' },
         { speaker: 'Arasy', text: 'Não é vergonha recomeçar. Volte àquele tempo e reconstrua a verdade, voz por voz.' },
     ], () => loadScene(ACTS[gameState.act].scene));
 }
-
-/** Monta a Arasy do templo conforme o progresso. */
 function buildTemploArasy(map) {
     const deusa  = map.mapObjects.find(o => o.name === 'deusa_item');
     const arasyX = deusa ? deusa.x + deusa.width / 2 - 9 : map.spawnPoint.x;
     const arasyY = deusa ? deusa.y + deusa.height - 26 : map.spawnPoint.y - 80;
     const arasy  = new Arasy(arasyX, arasyY);
-
     if (!gameState.arasyMet) {
         arasy.dialogueLines = [
             { speaker: 'Arasy', text: 'Aproxime-se sem medo. A água e a pedra já sabiam que você viria.' },
@@ -4223,9 +3079,7 @@ function buildTemploArasy(map) {
         };
         return arasy;
     }
-
     arasy.hasBeenIntroduced = true;
-
     if (gameState.hasAllInfos()) {
         arasy.dialogueLines = ACTS[gameState.act].arasyBrief;
         arasy.onInteractComplete = () => {
@@ -4236,19 +3090,11 @@ function buildTemploArasy(map) {
         const { lines, onDone } = buildArasyIncomplete(gameState.act);
         arasy.dialogueLines = lines;
         arasy.onInteractComplete = onDone;
-        arasy.afterDialogueLines = lines;   // sempre devolve à fase
+        arasy.afterDialogueLines = lines;   
     }
     return arasy;
 }
-
-// ═══════════════════════════════════════════════════════════════
-// DEFINIÇÃO DAS CENAS
-// ═══════════════════════════════════════════════════════════════
 const SCENES = {
-
-    // ─────────────────────────────────────────────
-    // BIBLIOTECA (Tutorial — início do jogo & quiz final)
-    // ─────────────────────────────────────────────
     biblioteca: {
         file: 'biblioteca.tmj',
         setup(map) {
@@ -4257,19 +3103,15 @@ const SCENES = {
             interactables = [];
             gameState.currentPhase = 'biblioteca';
             infoPanel.active = false;
-
             if (gameState.gameWon) {
                 this._setupQuizFinale(map);
             } else {
                 this._setupIntro(map);
             }
         },
-
-        /** Início do jogo: tutorial + professora + bibliotecária + livro. */
         _setupIntro(map) {
             tutorial.active = true;
             tutorial.step = 0;
-
             const professora = new NPC(map.spawnPoint.x - 80, map.spawnPoint.y - 120, {
                 name: 'Professora',
                 color: '#6B3FA0', accentColor: '#2d1e4f',
@@ -4290,7 +3132,6 @@ const SCENES = {
                 },
             });
             interactables.push(professora);
-
             const bibliotecaria = new NPC(map.spawnPoint.x + 80, map.spawnPoint.y - 200, {
                 name: 'Bibliotecária',
                 color: '#2E7D32', accentColor: '#5d4037',
@@ -4311,7 +3152,6 @@ const SCENES = {
                 },
             });
             interactables.push(bibliotecaria);
-
             const diario = map.mapObjects.find(o => o.name === 'item_diario');
             if (diario) {
                 interactables.push(new MagicBook(diario.x, diario.y, {
@@ -4331,11 +3171,8 @@ const SCENES = {
                 }));
             }
         },
-
-        /** Fase final: quiz da professora. */
         _setupQuizFinale(map) {
             tutorial.active = false;
-
             const bibliotecaria = new NPC(map.spawnPoint.x + 80, map.spawnPoint.y - 200, {
                 name: 'Bibliotecária',
                 color: '#2E7D32', accentColor: '#5d4037',
@@ -4347,7 +3184,6 @@ const SCENES = {
                 ],
             });
             interactables.push(bibliotecaria);
-
             const startQuiz = () => {
                 dialogueBox.show([
                     { speaker: 'Professora', text: 'Alex! Que bom que voltou. Terminou o seu trabalho de pesquisa?' },
@@ -4355,7 +3191,6 @@ const SCENES = {
                     { speaker: 'Professora', text: 'Excelente! Mas antes de aceitar seu trabalho, farei 3 perguntas rápidas para testar o seu aprendizado.' },
                 ], askQ1);
             };
-
             const askQ1 = () => {
                 dialogueBox.showChoices(
                     'Professora',
@@ -4380,7 +3215,6 @@ const SCENES = {
                         }
                     });
             };
-
             const askQ2 = () => {
                 dialogueBox.showChoices(
                     'Professora',
@@ -4405,7 +3239,6 @@ const SCENES = {
                         }
                     });
             };
-
             const askQ3 = () => {
                 dialogueBox.showChoices(
                     'Professora',
@@ -4432,7 +3265,6 @@ const SCENES = {
                         }
                     });
             };
-
             const professora = new NPC(map.spawnPoint.x - 80, map.spawnPoint.y - 120, {
                 name: 'Professora',
                 color: '#6B3FA0', accentColor: '#2d1e4f',
@@ -4446,10 +3278,6 @@ const SCENES = {
             interactables.push(professora);
         },
     },
-
-    // ─────────────────────────────────────────────
-    // TEMPLO (hub temporal — Arasy + estátuas das fases)
-    // ─────────────────────────────────────────────
     templo: {
         file: 'templo.tmj',
         setup(map) {
@@ -4461,8 +3289,6 @@ const SCENES = {
             tutorial.active = false;
             infoPanel.active = false;
             puzzleChancesLeft = PUZZLE_MAX_CHANCES;
-
-            // Estátuas das três fases (quebradas → restauradas) — já interativas (lore)
             for (const act of [1, 2, 3]) {
                 const obj = map.mapObjects.find(o => o.name === `estatua_fase${act}`);
                 if (obj) {
@@ -4471,16 +3297,8 @@ const SCENES = {
                     }));
                 }
             }
-
-            // Domínio natural de Arasy: vitórias-régias + fio de cachoeira sobre os
-            // dois poços d'água (tiles reaproveitados de farming.png / Vila Rica).
-            // Posições casam com os poços 2x2 do templo.tmj compacto (centros).
             interactables.push(new SacredSpring(256, 128));
             interactables.push(new SacredSpring(448, 128));
-
-            // Tomos dourados: livros-monumento interativos com pequenas lores da
-            // memória histórica (tile do "livro mágico" reaproveitado). Posições
-            // casam com os tiles de livro colocados em templo.tmj.
             const TOMOS = [
                 { x: 160, y: 288, name: 'Tomo dos Primeiros Povos',
                   text: 'Muito antes de 1500, milhares de povos indígenas já viviam, comerciavam e guardavam suas histórias nesta terra.' },
@@ -4503,10 +3321,7 @@ const SCENES = {
                     ],
                 }));
             }
-
             interactables.push(buildTemploArasy(map));
-
-            // Portal dinâmico para a fase atual
             if (gameState.arasyMet && !gameState.gameWon) {
                 const target = ACTS[gameState.act];
                 interactables.push(new Interactable(map.spawnPoint.x - 20, map.spawnPoint.y + 16, {
@@ -4519,10 +3334,6 @@ const SCENES = {
             }
         },
     },
-
-    // ─────────────────────────────────────────────
-    // VILA RICA (hub de investigação — ato 1)
-    // ─────────────────────────────────────────────
     vila_rica: {
         file: 'praca.tmj',
         setup(map) {
@@ -4544,8 +3355,6 @@ const SCENES = {
             gameState.currentPhase = 'vila_rica';
             tutorial.active = false;
             infoPanel.active = true;
-
-            // Vendedor do Mercado (info falsa: pão de queijo)
             const estatua = map.mapObjects.find(o => o.name === 'estatua_tiradentes');
             if (estatua) {
                 const info = GameState.INFO_DATA.vila_rica[3];
@@ -4571,8 +3380,6 @@ const SCENES = {
                     },
                 }));
             }
-
-            // Portais para os interiores
             const doors = [
                 { obj: 'porta_cambio',  scene: 'cambio',  label: 'Casa de Câmbio' },
                 { obj: 'porta_igreja',  scene: 'igreja',  label: 'Igreja' },
@@ -4592,10 +3399,6 @@ const SCENES = {
             }
         },
     },
-
-    // ─────────────────────────────────────────────
-    // CASA DE CÂMBIO (info verdadeira: Derrama)
-    // ─────────────────────────────────────────────
     cambio: {
         file: 'cambio.tmj',
         setup(map) {
@@ -4603,12 +3406,10 @@ const SCENES = {
             alex.y = map.spawnPoint.y;
             interactables = [];
             infoPanel.active = true;
-
             const info = GameState.INFO_DATA.vila_rica[0];
             const anchor = map.mapObjects.find(o => o.name === 'cambio_item');
             const npcX = anchor ? anchor.x + 10 : map.spawnPoint.x + 40;
             const npcY = anchor ? anchor.y + 30 : map.spawnPoint.y - 60;
-
             interactables.push(new NPC(npcX, npcY, {
                 name: 'Mineiro Revoltado',
                 color: '#D84315', accentColor: '#4a2c2a',
@@ -4631,7 +3432,6 @@ const SCENES = {
                     if (gameState.addInfo(info)) infoPanel.notifyNewInfo(info.title);
                 },
             }));
-
             const saida = map.mapObjects.find(o => o.name === 'saida_casa');
             if (saida) {
                 interactables.push(new Interactable(saida.x, saida.y, {
@@ -4647,10 +3447,6 @@ const SCENES = {
             }
         },
     },
-
-    // ─────────────────────────────────────────────
-    // IGREJA (info verdadeira: traição)
-    // ─────────────────────────────────────────────
     igreja: {
         file: 'igreja.tmj',
         setup(map) {
@@ -4658,12 +3454,10 @@ const SCENES = {
             alex.y = map.spawnPoint.y;
             interactables = [];
             infoPanel.active = true;
-
             const info = GameState.INFO_DATA.vila_rica[2];
             const anchor = map.mapObjects.find(o => o.name === 'item_confissao');
             const npcX = anchor ? anchor.x + 10 : 150;
             const npcY = anchor ? anchor.y + 30 : 80;
-
             interactables.push(new NPC(npcX, npcY, {
                 name: 'Espião da Coroa',
                 color: '#37474F', accentColor: '#1a1a2e',
@@ -4687,7 +3481,6 @@ const SCENES = {
                     if (gameState.addInfo(info)) infoPanel.notifyNewInfo(info.title);
                 },
             }));
-
             const saida = map.mapObjects.find(o => o.name === 'saida_igreja');
             if (saida) {
                 interactables.push(new Interactable(saida.x, saida.y, {
@@ -4703,10 +3496,6 @@ const SCENES = {
             }
         },
     },
-
-    // ─────────────────────────────────────────────
-    // TAVERNA (info falsa: dentaduras)
-    // ─────────────────────────────────────────────
     taverna: {
         file: 'taverna.tmj',
         setup(map) {
@@ -4714,12 +3503,10 @@ const SCENES = {
             alex.y = map.spawnPoint.y;
             interactables = [];
             infoPanel.active = true;
-
             const info = GameState.INFO_DATA.vila_rica[1];
             const anchor = map.mapObjects.find(o => o.name === 'item_mapa');
             const npcX = anchor ? anchor.x - 30 : map.spawnPoint.x + 40;
             const npcY = anchor ? anchor.y + 20 : map.spawnPoint.y - 80;
-
             interactables.push(new NPC(npcX, npcY, {
                 name: 'Contador de Histórias',
                 color: '#E65100', accentColor: '#bf360c',
@@ -4743,7 +3530,6 @@ const SCENES = {
                     if (gameState.addInfo(info)) infoPanel.notifyNewInfo(info.title);
                 },
             }));
-
             const saida = map.mapObjects.find(o => o.name === 'saida_taverna');
             if (saida) {
                 interactables.push(new Interactable(saida.x, saida.y, {
@@ -4759,10 +3545,6 @@ const SCENES = {
             }
         },
     },
-
-    // ─────────────────────────────────────────────
-    // RIO DE JANEIRO (Paço Imperial — ato 2)
-    // ─────────────────────────────────────────────
     rio_de_janeiro: {
         file: 'pacoimperial.tmj',
         setup(map) {
@@ -4772,7 +3554,6 @@ const SCENES = {
             gameState.currentPhase = 'rio_de_janeiro';
             infoPanel.active = true;
             tutorial.active = false;
-
             const D = GameState.INFO_DATA.rio_de_janeiro;
             const npcs = [
                 {
@@ -4846,10 +3627,6 @@ const SCENES = {
             spawnInfoNpcs(npcs);
         },
     },
-
-    // ─────────────────────────────────────────────
-    // SÃO PAULO (Salão da Abolição — ato 3)
-    // ─────────────────────────────────────────────
     sao_paulo: {
         file: 'gabineterepublica.tmj',
         setup(map) {
@@ -4859,7 +3636,6 @@ const SCENES = {
             gameState.currentPhase = 'sao_paulo';
             infoPanel.active = true;
             tutorial.active = false;
-
             const D = GameState.INFO_DATA.sao_paulo;
             const npcs = [
                 {
@@ -4946,10 +3722,6 @@ const SCENES = {
             spawnInfoNpcs(npcs);
         },
     },
-
-    // ─────────────────────────────────────────────
-    // VITÓRIA (créditos)
-    // ─────────────────────────────────────────────
     vitoria: {
         file: 'templo.tmj',
         setup(map) {
@@ -4958,13 +3730,10 @@ const SCENES = {
             interactables = [];
             infoPanel.active = false;
             tutorial.active = false;
-
-            // Estátuas restauradas como cenário da celebração
             for (const act of [1, 2, 3]) {
                 const obj = map.mapObjects.find(o => o.name === `estatua_fase${act}`);
                 if (obj) interactables.push(new PhaseStatue(obj.x, obj.y, act, gameState));
             }
-
             setTimeout(() => {
                 dialogueBox.show([
                     { speaker: 'Arasy', text: 'Olhe, Alex... os três tótens estão inteiros de novo. A terra respira aliviada.' },
@@ -4981,11 +3750,6 @@ const SCENES = {
         },
     },
 };
-
-/**
- * Cria os NPCs informantes de uma fase a partir de uma tabela declarativa.
- * Cada spec: { info, x, y, sprite, name, color, accent, open[], close[], after[] }
- */
 function spawnInfoNpcs(specs) {
     for (const s of specs) {
         interactables.push(new NPC(s.x, s.y, {
@@ -5006,40 +3770,28 @@ function spawnInfoNpcs(specs) {
         }));
     }
 }
-
-// ═══════════════════════════════════════════════════════════════
-// CARREGAR CENA (com fade + música + save)
-// ═══════════════════════════════════════════════════════════════
 async function loadScene(sceneName) {
     const scene = SCENES[sceneName];
     if (!scene) { console.error('Cena desconhecida:', sceneName); return; }
-
     audio.playSfx('sfx_portal');
-
     sceneManager.transitionTo(sceneName, async () => {
         try {
             const mapData = await fetchMap(scene.file);
             gameMap = buildMap(mapData);
             camera.setBounds(gameMap.widthPx, gameMap.heightPx);
-
             scene.setup(gameMap);
             alex.resolveCollision(gameMap);
-
             camera.x = alex.x + alex.width / 2  - camera.width / 2;
             camera.y = alex.y + alex.height / 2 - camera.height / 2;
             camera.x = Math.max(0, Math.min(camera.x, gameMap.widthPx  - camera.width));
             camera.y = Math.max(0, Math.min(camera.y, gameMap.heightPx - camera.height));
-
             returnButton.setVisible(SCENES_WITH_RETURN.has(sceneName));
-
             console.log(`🗺️ Cena "${sceneName}" — infos: ${gameState.getInfoCount()}/${gameState.getRequiredInfoCount()}`);
-
             audio.playMusic(MUSIC_BY_SCENE[sceneName]);
-
             currentSceneName   = sceneName;
             lastSavedInfoCount = gameState.getInfoCount();
             if (sceneName === 'vitoria') {
-                SaveSystem.clear();   // jogo concluído: próximo boot inicia do zero
+                SaveSystem.clear();   
             } else {
                 SaveSystem.save(gameState, sceneName);
             }
@@ -5048,15 +3800,9 @@ async function loadScene(sceneName) {
         }
     });
 }
-
-// ═══════════════════════════════════════════════════════════════
-// INICIALIZAÇÃO
-// ═══════════════════════════════════════════════════════════════
 async function init() {
     console.log('🎮 Ecos do Brasil — Inicializando...');
-
     await loadAllImages();
-
     alex = new Player(0, 0, {
         spriteSheet : IMAGES['player'],
         spriteLeft  : IMAGES['playerLeft'],
@@ -5068,7 +3814,6 @@ async function init() {
         speed       : 110,
         animSpeed   : 0.12,
     });
-
     dialogueBox  = new DialogueBox(canvas, ctx);
     infoPanel    = new InfoPanel(canvas, ctx, gameState);
     puzzleUI     = new PuzzleUI(canvas, ctx, gameState);
@@ -5077,9 +3822,7 @@ async function init() {
     returnButton = new ReturnButton(canvas, ctx);
     endingScreen = new EndingScreen(canvas, ctx, gameState);
     controlsScreen = new ControlsScreen(canvas, ctx);
-
     setupPortraits();
-
     try {
         const mapData = await fetchMap(SCENES.biblioteca.file);
         gameMap = buildMap(mapData);
@@ -5092,16 +3835,12 @@ async function init() {
         console.error('❌ Biblioteca não carregou:', err);
         return;
     }
-
     console.log('✅ Jogo pronto! H = controles, J = diário, T = voltar ao templo, M = som, F3 = debug');
     gameReady = true;
     audio.playMusic(MUSIC_BY_SCENE['biblioteca']);
     requestAnimationFrame(gameLoop);
-
     offerContinueIfSaved();
 }
-
-/** Retratos da caixa de diálogo (chave = nome usado nas falas). */
 function setupPortraits() {
     if (!IMAGES['characters']) return;
     const P = row => ({ img: IMAGES['characters'], sx: 4 * 16, sy: row * 16, sw: 16, sh: 16 });
@@ -5132,14 +3871,11 @@ function setupPortraits() {
         dialogueBox.portraits['Alex'] = { img: IMAGES['player'], sx: 0, sy: 4 * 32, sw: 32, sh: 32 };
     }
 }
-
-/** Oferece "Continuar / Novo jogo" se houver save com progresso real. */
 function offerContinueIfSaved() {
     const saved = SaveSystem.load();
     const hasProgress = saved && (saved.scene !== 'biblioteca' || saved.state.infoIds.length > 0 ||
                                   saved.state.bookFound || saved.state.talkedToTeacher);
     if (!hasProgress) return;
-
     tutorial.active = false;
     dialogueBox.showChoices(
         'Sistema',
@@ -5157,60 +3893,43 @@ function offerContinueIfSaved() {
             }
         });
 }
-
-// ═══════════════════════════════════════════════════════════════
-// GAME LOOP
-// ═══════════════════════════════════════════════════════════════
 function gameLoop(now) {
     const dt = Math.min((now - lastTime) / 1000, 0.1);
     lastTime = now;
     if (gameReady) { update(dt); draw(); }
     requestAnimationFrame(gameLoop);
 }
-
 function update(dt) {
     sceneManager.update(dt);
     if (sceneManager.transitioning) return;
-
     if (endingScreen.active) {
         endingScreen.update(dt);
         handleEndingInput();
         return;
     }
-
     if (handleControlsInput(dt)) return;
-
     if (handleJournalInput(dt)) return;
-
     if (puzzleUI.active) {
         puzzleUI.update(dt);
         return;
     }
-
     if (handleChoicesInput(dt)) return;
-
     upWasDown = false;
     downWasDown = false;
-
     handleReturnShortcut();
-
     if (!dialogueBox.active) {
         alex.update(dt, input, gameMap, interactables);
         camera.update(dt, alex);
         if (tutorial.active && tutorial.step === 0 && alex.hasMoved) tutorial.setStep(1);
     }
-
     dialogueBox.update(dt);
     tutorial.update(dt);
     infoPanel.update(dt);
     for (const obj of interactables) if (obj.update) obj.update(dt);
-
     checkSpawnTemploPortal();
     autosaveOnNewInfo();
     handleInteractionKey();
 }
-
-/** Tela final (ESPAÇO): recomeça a jornada do zero. */
 function handleEndingInput() {
     const confirm = input.isDown('Space') || input.isDown('KeyE') || input.isDown('Enter');
     if (confirm && !spaceWasDown) {
@@ -5223,8 +3942,6 @@ function handleEndingInput() {
     }
     spaceWasDown = confirm;
 }
-
-/** Tela de controles (H): toggle. Retorna true se consumiu o frame. */
 function handleControlsInput(dt) {
     const hDown = input.isDown('KeyH');
     if (hDown && !hWasDown) {
@@ -5236,13 +3953,10 @@ function handleControlsInput(dt) {
         }
     }
     hWasDown = hDown;
-
     if (!controlsScreen.active) return false;
     controlsScreen.update(dt);
     return true;
 }
-
-/** Diário (J): toggle + navegação. Retorna true se consumiu o frame. */
 function handleJournalInput(dt) {
     const jDown = input.isDown('KeyJ');
     if (jDown && !jWasDown) {
@@ -5254,9 +3968,7 @@ function handleJournalInput(dt) {
         }
     }
     jWasDown = jDown;
-
     if (!journal.active) return false;
-
     const up    = input.isDown('ArrowUp')    || input.isDown('KeyW');
     const down  = input.isDown('ArrowDown')  || input.isDown('KeyS');
     const left  = input.isDown('ArrowLeft')  || input.isDown('KeyA');
@@ -5272,38 +3984,30 @@ function handleJournalInput(dt) {
     journal.update(dt);
     return true;
 }
-
-/** Alternativas de diálogo (setas + confirmar). Retorna true se ativo. */
 function handleChoicesInput(dt) {
     if (!(dialogueBox.active && dialogueBox.options && dialogueBox.options.length > 0)) return false;
-
     const up   = input.isDown('ArrowUp')   || input.isDown('KeyW');
     const down = input.isDown('ArrowDown') || input.isDown('KeyS');
     if (up && !upWasDown)        dialogueBox.navigateOptions(-1);
     else if (down && !downWasDown) dialogueBox.navigateOptions(1);
     upWasDown = up;
     downWasDown = down;
-
     const confirm = input.isDown('Space') || input.isDown('KeyE') || input.isDown('Enter');
     if (confirm && !spaceWasDown) {
         audio.playSfx('sfx_confirm');
         dialogueBox.selectCurrentOption();
     }
     spaceWasDown = confirm;
-
     dialogueBox.update(dt);
     tutorial.update(dt);
     infoPanel.update(dt);
     return true;
 }
-
-/** Tecla T: voltar ao templo (equivalente ao botão). */
 function handleReturnShortcut() {
     const tDown = input.isDown('KeyT');
     if (tDown && !tWasDown && canUseReturnButton()) goToTemplo();
     tWasDown = tDown;
 }
-
 function autosaveOnNewInfo() {
     const count = gameState.getInfoCount();
     if (count !== lastSavedInfoCount) {
@@ -5312,7 +4016,6 @@ function autosaveOnNewInfo() {
         SaveSystem.save(gameState, currentSceneName);
     }
 }
-
 function handleInteractionKey() {
     const space = input.isDown('Space') || input.isDown('KeyE');
     if (space && !spaceWasDown) {
@@ -5325,15 +4028,10 @@ function handleInteractionKey() {
     }
     spaceWasDown = space;
 }
-
-// ═══════════════════════════════════════════════════════════════
-// INTERAÇÃO
-// ═══════════════════════════════════════════════════════════════
 function rectOverlap(a, b) {
     return a.x < b.x + b.width  && a.x + a.width  > b.x &&
            a.y < b.y + b.height && a.y + a.height > b.y;
 }
-
 function checkInteraction() {
     const box = alex.getInteractionBox();
     for (const obj of interactables) {
@@ -5348,38 +4046,25 @@ function checkInteraction() {
         }
     }
 }
-
-// ═══════════════════════════════════════════════════════════════
-// RENDERIZAÇÃO
-// ═══════════════════════════════════════════════════════════════
 function draw() {
     ctx.fillStyle = '#120d0a';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-
     if (puzzleUI.active) {
         puzzleUI.draw();
         return;
     }
-
-    // ── Mundo (escala 2x, pixel art) ──
     ctx.save();
     ctx.imageSmoothingEnabled = false;
     ctx.scale(WORLD_SCALE, WORLD_SCALE);
     camera.apply(ctx);
-
     if (gameMap) gameMap.draw(ctx);
-
     const renderQueue = interactables.filter(o => o.draw);
     if (alex) renderQueue.push(alex);
     renderQueue.sort((a, b) => (a.y + (a.height || 0)) - (b.y + (b.height || 0)));
     for (const entity of renderQueue) entity.draw(ctx);
-
     if (debugMode && gameMap) drawDebugOverlay();
-
     camera.restore(ctx);
     ctx.restore();
-
-    // ── UI (alta resolução) ──
     if (dialogueBox)  dialogueBox.draw();
     if (tutorial)     tutorial.draw();
     if (infoPanel)    infoPanel.draw();
@@ -5390,18 +4075,14 @@ function draw() {
     drawControlsHint();
     sceneManager.draw();
 }
-
-/** Dica discreta e permanente (canto inferior esquerdo) lembrando da tecla de ajuda. */
 function drawControlsHint() {
     if (dialogueBox.active || puzzleUI.active || journal.active ||
         endingScreen.active || controlsScreen.active || (tutorial && tutorial.active)) return;
-
     ctx.fillStyle = 'rgba(245, 240, 232, 0.45)';
     ctx.font = font(TYPE.caption);
     ctx.textAlign = 'left';
     ctx.fillText('H: controles', SPACE.sm, canvas.height - SPACE.sm);
 }
-
 function drawDebugOverlay() {
     gameMap.drawCollisionDebug(ctx);
     ctx.strokeStyle = 'rgba(0,255,0,0.9)';
@@ -5416,24 +4097,17 @@ function drawDebugOverlay() {
         ctx.strokeRect(b.x, b.y, b.width, b.height);
     }
 }
-
-// ═══════════════════════════════════════════════════════════════
-// PORTAL DINÂMICO DO TEMPLO
-// ═══════════════════════════════════════════════════════════════
 function checkSpawnTemploPortal() {
     if (!gameMap) return;
     if (!['vila_rica', 'rio_de_janeiro', 'sao_paulo'].includes(gameState.currentPhase)) return;
     if (!gameState.hasAllInfos()) return;
     if (interactables.some(item => item.name === 'Portal Templo')) return;
-
     console.log('✨ Todos os fatos coletados! Abrindo portal para o Templo.');
     audio.playSfx('sfx_portal');
-
     const portalObj = gameMap.mapObjects.find(o => o.name === 'volta_templo');
     const px = portalObj ? portalObj.x : gameMap.spawnPoint.x;
     const py = portalObj ? portalObj.y : (gameState.currentPhase === 'vila_rica'
         ? gameMap.spawnPoint.y - 5 : gameMap.spawnPoint.y + 40);
-
     interactables.push(new Interactable(px, py, {
         name: 'Portal Templo',
         width: portalObj ? portalObj.width : 30,
@@ -5445,10 +4119,6 @@ function checkSpawnTemploPortal() {
         onInteractComplete: () => loadScene('templo'),
     }));
 }
-
-// ═══════════════════════════════════════════════════════════════
-// HOOK DE DEPURAÇÃO / TESTES (não interfere no jogo normal)
-// ═══════════════════════════════════════════════════════════════
 window.__ecosDebug = {
     loadScene,
     get gameState() { return gameState; },
@@ -5466,8 +4136,5 @@ window.__ecosDebug = {
     SCENES,
     ACTS,
 };
-
-// ═══════════════════════════════════════════════════════════════
 init();
-
 })();

@@ -1,23 +1,17 @@
 import fs from 'fs';
-
 const mapData = JSON.parse(fs.readFileSync('./assets/maps/pacoimperial.tmj', 'utf8'));
-
 const collisionRects = [];
 const collisionPolygons = [];
-
 for (const layer of mapData.layers) {
     if (layer.type !== 'objectgroup') continue;
-
     const isCollisionLayer = (
         layer.name === 'Colisões' ||
         layer.name.toLowerCase() === 'colisoes' ||
         layer.name.toLowerCase().includes('colis')
     );
-
     if (isCollisionLayer) {
         for (const obj of layer.objects) {
             if (obj.name === 'spawn_player') continue;
-
             if (obj.polygon) {
                 collisionPolygons.push(
                     obj.polygon.map(p => ({ x: obj.x + p.x, y: obj.y + p.y }))
@@ -35,7 +29,6 @@ for (const layer of mapData.layers) {
         }
     }
 }
-
 function pointInPoly(px, py, poly) {
     let inside = false;
     const n = poly.length;
@@ -49,16 +42,12 @@ function pointInPoly(px, py, poly) {
     }
     return inside;
 }
-
 function isColliding(x, y, w = 16, h = 24) {
-    // Canvas bounds
     if (x < 0 || y < 0 || x + w > 480 || y + h > 640) return true;
-
     for (const r of collisionRects) {
         if (x < r.x + r.width  && x + w > r.x &&
             y < r.y + r.height && y + h > r.y) return true;
     }
-
     const pts = [
         { x, y }, { x: x+w, y }, { x, y: y+h }, { x: x+w, y: y+h },
         { x: x + w/2, y: y + h/2 }
@@ -68,11 +57,8 @@ function isColliding(x, y, w = 16, h = 24) {
             if (pointInPoly(p.x, p.y, poly)) return true;
         }
     }
-
     return false;
 }
-
-// Escanear o mapa e encontrar pontos livres nas diferentes faixas de Y
 console.log("=== PONTOS LIVRES DETECTADOS (X, Y) ===");
 for (let y = 80; y < 600; y += 40) {
     const freeX = [];

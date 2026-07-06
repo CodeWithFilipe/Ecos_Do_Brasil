@@ -7,11 +7,9 @@ body {
     margin: 0;
     overflow: hidden;
 }
-
 canvas {
     image-rendering: pixelated;
     image-rendering: crisp-edges;
-    /* Escala agora é calculada em JS (resizeCanvas) para se adaptar à janela */
     box-shadow: 0 0 20px rgba(0,0,0,0.8);
-    background-color: #120d0a; /* Cor de fundo provisória da biblioteca */
+    background-color: #120d0a; 
 }

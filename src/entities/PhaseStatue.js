@@ -1,17 +1,5 @@
 import { Interactable } from './Interactable.js';
-
-/**
- * PhaseStatue — estátua comemorativa de um ato no Templo de Arasy.
- *
- * Estado visual derivado do GameState (nunca duplicado localmente):
- *  - Ato pendente  → estátua quebrada (busto rachado, entulho na base)
- *  - Ato concluído → estátua restaurada, com brilho dourado
- *
- * O exame (tecla E) explica o que a estátua representa.
- */
 export class PhaseStatue extends Interactable {
-
-    /** Aparência e textos por ato. */
     static ACT_INFO = Object.freeze({
         1: {
             label : 'Inconfidência Mineira — 1789',
@@ -56,13 +44,6 @@ export class PhaseStatue extends Interactable {
             ],
         },
     });
-
-    /**
-     * @param {number} x @param {number} y
-     * @param {1|2|3} act
-     * @param {import('../core/GameState.js').GameState} gameState
-     * @param {{width?: number, height?: number}} [config]
-     */
     constructor(x, y, act, gameState, config = {}) {
         const info = PhaseStatue.ACT_INFO[act];
         super(x, y, {
@@ -77,12 +58,9 @@ export class PhaseStatue extends Interactable {
         this.accent    = info.accent;
         this.timer     = Math.random() * 10;
     }
-
     get restored() {
         return this.gameState.isActCompleted(this.act);
     }
-
-    /** Diálogo muda conforme o estado — sempre re-consultado. */
     getDialogue() {
         const info = PhaseStatue.ACT_INFO[this.act];
         return {
@@ -90,15 +68,12 @@ export class PhaseStatue extends Interactable {
             callback: null,
         };
     }
-
     update(dt) {
         this.timer += dt;
     }
-
     draw(ctx) {
         const cx   = this.x + this.width / 2;
         const base = this.y + this.height;
-
         this._drawPedestal(ctx, cx, base);
         if (this.restored) {
             this._drawFigure(ctx, cx, base, false);
@@ -108,36 +83,28 @@ export class PhaseStatue extends Interactable {
             this._drawRubble(ctx, cx, base);
         }
     }
-
     _drawPedestal(ctx, cx, base) {
-        // Base de pedra em dois degraus
         ctx.fillStyle = '#8f8a80';
         ctx.fillRect(cx - 13, base - 8, 26, 8);
         ctx.fillStyle = '#a8a396';
         ctx.fillRect(cx - 10, base - 14, 20, 7);
-        // Sombra do degrau
         ctx.fillStyle = 'rgba(0,0,0,0.2)';
         ctx.fillRect(cx - 13, base - 2, 26, 2);
-        // Placa com a cor do ato
         ctx.fillStyle = this.accent;
         ctx.fillRect(cx - 5, base - 7, 10, 4);
     }
-
     _drawFigure(ctx, cx, base, broken) {
         const stone  = broken ? '#7d786e' : '#cfc9b8';
         const shade  = broken ? '#5f5b52' : '#a8a396';
         const top    = base - 14;
-
         if (broken) {
-            // Apenas o torso partido, inclinado
             ctx.save();
             ctx.translate(cx, top - 10);
             ctx.rotate(-0.12);
             ctx.fillStyle = stone;
-            ctx.fillRect(-6, -8, 12, 16);       // torso
+            ctx.fillRect(-6, -8, 12, 16);       
             ctx.fillStyle = shade;
-            ctx.fillRect(1, -8, 5, 16);         // sombra lateral
-            // Linha de fratura no topo
+            ctx.fillRect(1, -8, 5, 16);         
             ctx.fillStyle = '#4a463f';
             ctx.beginPath();
             ctx.moveTo(-6, -8);
@@ -146,8 +113,6 @@ export class PhaseStatue extends Interactable {
             ctx.closePath();
             ctx.fill();
             ctx.restore();
-
-            // Rachaduras no pedestal
             ctx.strokeStyle = '#4a463f';
             ctx.lineWidth = 1;
             ctx.beginPath();
@@ -157,24 +122,19 @@ export class PhaseStatue extends Interactable {
             ctx.stroke();
             return;
         }
-
-        // Figura completa: corpo, braço erguido com tocha/bandeira
         ctx.fillStyle = stone;
-        ctx.fillRect(cx - 5, top - 22, 10, 12);          // torso
+        ctx.fillRect(cx - 5, top - 22, 10, 12);          
         ctx.beginPath();
-        ctx.arc(cx, top - 25, 4, 0, Math.PI * 2);        // cabeça
+        ctx.arc(cx, top - 25, 4, 0, Math.PI * 2);        
         ctx.fill();
-        ctx.fillRect(cx - 7, top - 10, 14, 3);           // base do manto
+        ctx.fillRect(cx - 7, top - 10, 14, 3);           
         ctx.fillStyle = shade;
-        ctx.fillRect(cx + 1, top - 22, 4, 12);           // sombra
-        // Braço erguido
+        ctx.fillRect(cx + 1, top - 22, 4, 12);           
         ctx.fillStyle = stone;
         ctx.fillRect(cx + 4, top - 30, 3, 10);
-        // Chama/emblema na mão (cor do ato)
         ctx.fillStyle = this.accent;
         ctx.fillRect(cx + 3.5, top - 34, 4, 4);
     }
-
     _drawRubble(ctx, cx, base) {
         ctx.fillStyle = '#6e6a61';
         ctx.fillRect(cx - 12, base - 4, 5, 3);
@@ -184,7 +144,6 @@ export class PhaseStatue extends Interactable {
         ctx.fillRect(cx + 9, base - 3, 3, 2);
         ctx.fillRect(cx - 9, base - 6, 3, 2);
     }
-
     _drawGlow(ctx, cx, base) {
         const pulse = 0.28 + Math.sin(this.timer * 2.5) * 0.12;
         const cy    = base - 26;

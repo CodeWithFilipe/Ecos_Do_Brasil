@@ -1,42 +1,20 @@
 import { Map } from '../world/Map.js';
-
-/**
- * SceneManager — gerencia transições entre cenas/mapas.
- *
- * Cada cena é definida por:
- *  {
- *    mapFile    : 'assets/maps/praca.tmj',
- *    tilesets   : { stemName: imageElement, ... },
- *    onLoad     : (map, player) => void   // posicionar jogador, criar NPCs, etc.
- *  }
- */
 export class SceneManager {
     constructor(canvas, ctx) {
         this.canvas = canvas;
         this.ctx    = ctx;
-
-        // Estado de fade
         this.fadeAlpha   = 0;
         this.fadingOut   = false;
         this.fadingIn    = false;
-        this.fadeSpeed   = 2.2;        // alpha/s
+        this.fadeSpeed   = 2.2;        
         this.fadeColor   = '#000';
-        this._pendingLoad = null;       // função chamada no pico do fade
-
+        this._pendingLoad = null;       
         this.currentScene = null;
-        this.currentMap   = null;      // instância de Map atual
+        this.currentMap   = null;      
     }
-
     get transitioning() {
         return this.fadingOut || this.fadingIn;
     }
-
-    /**
-     * Inicia uma transição para outra cena.
-     * @param {Function} midCallback — chamado no meio do fade (tela preta).
-     *   Deve fazer: carregar mapa, reposicionar jogador, recriar NPCs.
-     *   Pode ser async.
-     */
     transitionTo(sceneName, midCallback) {
         if (this.transitioning) return;
         this.currentScene = sceneName;
@@ -45,7 +23,6 @@ export class SceneManager {
         this._pendingLoad = midCallback;
         this._midDone     = false;
     }
-
     update(dt) {
         if (this.fadingOut) {
             this.fadeAlpha += this.fadeSpeed * dt;
@@ -55,7 +32,6 @@ export class SceneManager {
                 if (!this._midDone) {
                     this._midDone = true;
                     const result = this._pendingLoad?.();
-                    // suporte a callback async
                     if (result && typeof result.then === 'function') {
                         result.then(() => { this.fadingIn = true; });
                     } else {
@@ -71,7 +47,6 @@ export class SceneManager {
             }
         }
     }
-
     draw() {
         if (this.fadeAlpha <= 0) return;
         this.ctx.fillStyle   = this.fadeColor;

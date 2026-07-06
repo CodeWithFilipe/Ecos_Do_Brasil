@@ -1,67 +1,33 @@
-/**
- * GameState — estado global do jogo (fonte única de verdade).
- *
- * Responsabilidades:
- *  - Progresso da aventura (ato, fase, flags de história)
- *  - Coleção de informações históricas (por ato, com arquivo permanente)
- *  - Verificação dos puzzles de cada ato
- *
- * Convenções:
- *  - "Ato" 1..3 = Vila Rica, Rio de Janeiro, São Paulo.
- *  - collectedInfos NUNCA é limpo ao concluir um ato: os registros das
- *    fases concluídas permanecem para consulta no diário (com selo
- *    FATO/BOATO revelado). Consultas de progresso são sempre por ato.
- */
 export class GameState {
-
-    /** Fase (chave de INFO_DATA) de cada ato. */
     static PHASE_BY_ACT = Object.freeze({ 1: 'vila_rica', 2: 'rio_de_janeiro', 3: 'sao_paulo' });
-
-    /** Quantidade de informações necessárias por ato. */
     static REQUIRED_BY_ACT = Object.freeze({ 1: 4, 2: 6, 3: 8 });
-
-    /** Par (início, fim) correto do puzzle de cada ato. */
     static PUZZLE_ANSWER_BY_ACT = Object.freeze({
         1: { start: 'derrama',         end: 'traicao' },
         2: { start: 'republica_inicio', end: 'republica_fim' },
         3: { start: 'leiaurea_inicio',  end: 'leiaurea_fim' },
     });
-
     constructor() {
         this.reset();
     }
-
     reset() {
         this.act               = 1;
-        this.completedActs     = [];      // atos com puzzle vencido (diário revela selos)
+        this.completedActs     = [];      
         this.currentPhase      = 'biblioteca';
-        this.tutorialStep      = 0;       // 0=mover, 1=interagir, 2=professora, 3=done
+        this.tutorialStep      = 0;       
         this.talkedToTeacher   = false;
         this.talkedToLibrarian = false;
         this.bookFound         = false;
         this.arasyMet          = false;
-        this.collectedInfos    = [];      // acumula TODOS os atos (diário)
+        this.collectedInfos    = [];      
         this.puzzleAttempts    = 0;
         this.gameWon           = false;
     }
-
-    // ── Tutorial ─────────────────────────────────────────────
-
     advanceTutorial() {
         this.tutorialStep = Math.min(this.tutorialStep + 1, 4);
     }
-
     isTutorialDone() {
         return this.tutorialStep >= 3;
     }
-
-    // ── Atos ─────────────────────────────────────────────────
-
-    /**
-     * Descobre a qual ato uma informação pertence, pela fonte canônica.
-     * @param {{id: string}} info
-     * @returns {1|2|3|null}
-     */
     getInfoAct(info) {
         if (!info) return null;
         for (const [act, phase] of Object.entries(GameState.PHASE_BY_ACT)) {
@@ -69,65 +35,35 @@ export class GameState {
         }
         return null;
     }
-
-    /** @param {number} act */
     isActCompleted(act) {
         return this.completedActs.includes(act);
     }
-
-    /** Marca o ato atual como concluído (idempotente). */
     completeCurrentAct() {
         if (!this.isActCompleted(this.act)) this.completedActs.push(this.act);
     }
-
-    // ── Informações coletáveis ───────────────────────────────
-
-    /**
-     * Registra uma informação coletada.
-     * @param {Object} info — item de INFO_DATA
-     * @returns {boolean} true se era inédita
-     */
     addInfo(info) {
         if (this.hasInfo(info.id)) return false;
         this.collectedInfos.push(info);
         return true;
     }
-
     hasInfo(id) {
         return this.collectedInfos.some(i => i.id === id);
     }
-
-    /** Informações coletadas pertencentes ao ato ATUAL. */
     getCurrentActInfos() {
         return this.collectedInfos.filter(i => this.getInfoAct(i) === this.act);
     }
-
-    /** Contagem do ato atual (HUD, portal, puzzle). */
     getInfoCount() {
         return this.getCurrentActInfos().length;
     }
-
     getRequiredInfoCount() {
         return GameState.REQUIRED_BY_ACT[this.act] ?? 4;
     }
-
     hasAllInfos() {
         return this.getInfoCount() >= this.getRequiredInfoCount();
     }
-
-    /** Remove apenas as informações do ato atual (derrota no puzzle). */
     clearCurrentActInfos() {
         this.collectedInfos = this.collectedInfos.filter(i => this.getInfoAct(i) !== this.act);
     }
-
-    // ── Puzzle ───────────────────────────────────────────────
-
-    /**
-     * Confere a resposta do puzzle do ato atual.
-     * @param {string} startId
-     * @param {string} endId
-     * @returns {boolean}
-     */
     checkPuzzle(startId, endId) {
         this.puzzleAttempts++;
         const answer = GameState.PUZZLE_ANSWER_BY_ACT[this.act];
@@ -135,8 +71,6 @@ export class GameState {
         if (correct && this.act === 3) this.gameWon = true;
         return correct;
     }
-
-    // ── Dados canônicos das informações por fase ─────────────
     static INFO_DATA = {
         vila_rica: [
             {
