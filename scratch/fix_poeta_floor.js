@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 
-const mapPath = './assets/maps/poeta.tmj';
+const mapPath = './assets/maps/cambio.tmj';
 const mapData = JSON.parse(fs.readFileSync(mapPath, 'utf8'));
 
 // 1. Encontrar o GID base do interior16.tsx
@@ -23,7 +23,7 @@ if (layer1 && layer1.name === 'Camada de Blocos 1') {
         for (let c = 0; c < 30; c++) {
             const idx = r * 30 + c;
             
-            // Condição para estar dentro do salão da casa do poeta:
+            // Condição para estar dentro do salão da casa de câmbio:
             // Entre as linhas 3 e 17 (inclusive), e colunas 3 a 26 (inclusive)
             const isMainHall = (r >= 3 && r <= 17 && c >= 3 && c <= 26);
             
@@ -41,4 +41,4 @@ if (layer1 && layer1.name === 'Camada de Blocos 1') {
 }
 
 fs.writeFileSync(mapPath, JSON.stringify(mapData, null, 2), 'utf8');
-console.log('✅ poeta.tmj atualizado com sucesso!');
+console.log('✅ cambio.tmj atualizado com sucesso!');

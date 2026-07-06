@@ -352,7 +352,7 @@ export class NPC {
         }
 
         // Bigode simples de época para a maioria dos homens
-        if (!isFemale && (isNoble || nameLower.includes('contador') || nameLower.includes('poeta') || nameLower.includes('mineiro'))) {
+        if (!isFemale && (isNoble || nameLower.includes('contador') || nameLower.includes('mineiro'))) {
             ctx.fillStyle = '#2d1e18';
             ctx.fillRect(cx - 2.5, headY + 1.2, 5, 1);
             // Pontas do bigode curvadas para cima

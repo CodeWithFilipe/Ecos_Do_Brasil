@@ -918,12 +918,12 @@ const SAVE_VERSION = 1;
 
 // Cenas válidas para respawn (deve espelhar as chaves de SCENES no main.js)
 const VALID_SCENES = [
-    'biblioteca', 'templo', 'vila_rica', 'poeta', 'igreja', 'taverna',
+    'biblioteca', 'templo', 'vila_rica', 'cambio', 'igreja', 'taverna',
     'rio_de_janeiro', 'sao_paulo', 'vitoria'
 ];
 
 // Cenas interiores de Vila Rica: respawn seguro é a própria praça
-const SCENE_REDIRECT = { poeta: 'vila_rica', igreja: 'vila_rica', taverna: 'vila_rica', vitoria: 'biblioteca' };
+const SCENE_REDIRECT = { cambio: 'vila_rica', igreja: 'vila_rica', taverna: 'vila_rica', vitoria: 'biblioteca' };
 
 function storageAvailable() {
     try {
@@ -1545,7 +1545,7 @@ class NPC {
         }
 
         // Bigode simples de época para a maioria dos homens
-        if (!isFemale && (isNoble || nameLower.includes('contador') || nameLower.includes('poeta') || nameLower.includes('mineiro'))) {
+        if (!isFemale && (isNoble || nameLower.includes('contador') || nameLower.includes('mineiro'))) {
             ctx.fillStyle = '#2d1e18';
             ctx.fillRect(cx - 2.5, headY + 1.2, 5, 1);
             // Pontas do bigode curvadas para cima
@@ -3891,7 +3891,7 @@ let jWasDown      = false;
 let tWasDown      = false;
 let hWasDown      = false;
 let gameReady     = false;
-let nextSpawnDoor = null;   // porta para respawn inteligente (ex.: 'porta_poeta')
+let nextSpawnDoor = null;   // porta para respawn inteligente (ex.: 'porta_cambio')
 let currentSceneName   = 'biblioteca';
 let lastSavedInfoCount = 0;
 let puzzleChancesLeft  = 3;
@@ -3955,7 +3955,7 @@ const ACTS = Object.freeze({
 
 /** Cenas em que o botão "Voltar ao Templo" fica disponível. */
 const SCENES_WITH_RETURN = new Set([
-    'vila_rica', 'poeta', 'igreja', 'taverna', 'rio_de_janeiro', 'sao_paulo',
+    'vila_rica', 'cambio', 'igreja', 'taverna', 'rio_de_janeiro', 'sao_paulo',
 ]);
 
 const PUZZLE_MAX_CHANCES = 3;
@@ -3973,7 +3973,7 @@ const MUSIC_BY_SCENE = {
     biblioteca     : 'musica_biblioteca',
     templo         : 'musica_templo',
     vila_rica      : 'musica_vila_rica',
-    poeta          : 'musica_vila_rica',
+    cambio         : 'musica_vila_rica',
     igreja         : 'musica_vila_rica',
     taverna        : 'musica_vila_rica',
     rio_de_janeiro : 'musica_rio',
@@ -4574,7 +4574,7 @@ const SCENES = {
 
             // Portais para os interiores
             const doors = [
-                { obj: 'porta_poeta',   scene: 'poeta',   label: 'Casa do Poeta' },
+                { obj: 'porta_cambio',  scene: 'cambio',  label: 'Casa de Câmbio' },
                 { obj: 'porta_igreja',  scene: 'igreja',  label: 'Igreja' },
                 { obj: 'porta_taverna', scene: 'taverna', label: 'Taverna' },
             ];
@@ -4594,10 +4594,10 @@ const SCENES = {
     },
 
     // ─────────────────────────────────────────────
-    // CASA DO POETA (info verdadeira: Derrama)
+    // CASA DE CÂMBIO (info verdadeira: Derrama)
     // ─────────────────────────────────────────────
-    poeta: {
-        file: 'poeta.tmj',
+    cambio: {
+        file: 'cambio.tmj',
         setup(map) {
             alex.x = map.spawnPoint.x;
             alex.y = map.spawnPoint.y;
@@ -4605,7 +4605,7 @@ const SCENES = {
             infoPanel.active = true;
 
             const info = GameState.INFO_DATA.vila_rica[0];
-            const anchor = map.mapObjects.find(o => o.name === 'poeta_item');
+            const anchor = map.mapObjects.find(o => o.name === 'cambio_item');
             const npcX = anchor ? anchor.x + 10 : map.spawnPoint.x + 40;
             const npcY = anchor ? anchor.y + 30 : map.spawnPoint.y - 60;
 
@@ -4640,7 +4640,7 @@ const SCENES = {
                     detectPad: DOOR_DETECT_PAD,
                     dialogueLines: [{ speaker: 'Alex', text: '[Voltar para a Vila Rica]' }],
                     onInteractComplete: () => {
-                        nextSpawnDoor = 'porta_poeta';
+                        nextSpawnDoor = 'porta_cambio';
                         loadScene('vila_rica');
                     },
                 }));

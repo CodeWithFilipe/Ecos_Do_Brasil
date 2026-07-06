@@ -15,12 +15,12 @@ const SAVE_VERSION = 1;
 
 // Cenas válidas para respawn (deve espelhar as chaves de SCENES no main.js)
 const VALID_SCENES = [
-    'biblioteca', 'templo', 'vila_rica', 'poeta', 'igreja', 'taverna',
+    'biblioteca', 'templo', 'vila_rica', 'cambio', 'igreja', 'taverna',
     'rio_de_janeiro', 'sao_paulo', 'vitoria'
 ];
 
 // Cenas interiores de Vila Rica: respawn seguro é a própria praça
-const SCENE_REDIRECT = { poeta: 'vila_rica', igreja: 'vila_rica', taverna: 'vila_rica', vitoria: 'biblioteca' };
+const SCENE_REDIRECT = { cambio: 'vila_rica', igreja: 'vila_rica', taverna: 'vila_rica', vitoria: 'biblioteca' };
 
 function storageAvailable() {
     try {
