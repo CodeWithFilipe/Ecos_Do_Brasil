@@ -1,7 +1,7 @@
 import { COLORS, font, SPACE, wrapLines } from './theme.js';
 
 /**
- * PuzzleUI — o Desafio de Clio.
+ * PuzzleUI — o Desafio de Arasy.
  *
  * O jogador escolhe, entre as informações coletadas na fase ATUAL,
  * qual deu INÍCIO e qual marcou o FIM do movimento histórico.
@@ -172,14 +172,14 @@ export class PuzzleUI {
         ctx.textAlign = 'center';
         ctx.fillStyle = COLORS.gold;
         ctx.font = font(26, { bold: true });
-        ctx.fillText('🏛️  O DESAFIO DE CLIO  🏛️', W / 2, 110);
+        ctx.fillText('🏛️  O DESAFIO DE ARASY  🏛️', W / 2, 110);
 
         ctx.fillStyle = COLORS.parchment;
         ctx.font = font(17);
         const lines = [
             'Você coletou as informações históricas desta época.',
             '',
-            'Agora, Clio precisa que você identifique:',
+            'Agora, Arasy precisa que você identifique:',
             '',
             '1. A informação que DEU INÍCIO ao movimento',
             '2. A informação que ENCERROU o movimento',

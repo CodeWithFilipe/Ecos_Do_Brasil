@@ -1,7 +1,7 @@
 import { Interactable } from './Interactable.js';
 
 /**
- * PhaseStatue — estátua comemorativa de um ato no Templo de Clio.
+ * PhaseStatue — estátua comemorativa de um ato no Templo de Arasy.
  *
  * Estado visual derivado do GameState (nunca duplicado localmente):
  *  - Ato pendente  → estátua quebrada (busto rachado, entulho na base)
@@ -18,11 +18,13 @@ export class PhaseStatue extends Interactable {
             accent: '#c62828',
             broken: [
                 { speaker: 'Alex', text: 'Uma estátua em ruínas... A placa diz: "Inconfidência Mineira, 1789".' },
-                { speaker: 'Clio', text: 'A névoa de mentiras corrói a memória de Vila Rica. Restaure a verdade para reerguê-la.' },
+                { speaker: 'Arasy', text: 'Este tótem guarda Vila Rica. Onde o ouro corria, corriam também impostos que sufocavam o povo.' },
+                { speaker: 'Arasy', text: 'A névoa das mentiras rachou a pedra. Devolva a verdade à terra e o tótem se reerguerá.' },
             ],
             restored: [
                 { speaker: 'Alex', text: 'A estátua da Inconfidência Mineira, restaurada e reluzente!' },
-                { speaker: 'Clio', text: 'A Derrama acendeu a revolta; a traição de Silvério dos Reis a apagou. A verdade está preservada.' },
+                { speaker: 'Arasy', text: 'A cobrança da Derrama acendeu a revolta; a traição de Silvério dos Reis a apagou.' },
+                { speaker: 'Arasy', text: 'Tiradentes virou símbolo — mas foram gente comum, de carne e coragem, que sonharam liberdade. Isto a pedra agora lembra.' },
             ],
         },
         2: {
@@ -30,11 +32,13 @@ export class PhaseStatue extends Interactable {
             accent: '#1565C0',
             broken: [
                 { speaker: 'Alex', text: 'Esta estátua está partida ao meio... "Proclamação da República, 1889".' },
-                { speaker: 'Clio', text: 'Os boatos de 1889 ainda distorcem a História. Desvende-os no Rio de Janeiro.' },
+                { speaker: 'Arasy', text: 'Aqui repousa a memória do fim do Império. Os boatos de 1889 ainda a distorcem.' },
+                { speaker: 'Arasy', text: 'Vá ao Rio de Janeiro e separe o que aconteceu daquilo que só foi rumor.' },
             ],
             restored: [
                 { speaker: 'Alex', text: 'A estátua da República brilha novamente!' },
-                { speaker: 'Clio', text: 'Militares, Igreja e cafeicultores derrubaram o Império — e a verdade resistiu aos boatos.' },
+                { speaker: 'Arasy', text: 'Militares, Igreja e cafeicultores, cada um por seu motivo, derrubaram a Monarquia.' },
+                { speaker: 'Arasy', text: 'Não foi um passe de mágica nem obra de um só homem: foi o peso de muitos descontentamentos. A verdade resistiu aos boatos.' },
             ],
         },
         3: {
@@ -42,11 +46,13 @@ export class PhaseStatue extends Interactable {
             accent: '#c9a227',
             broken: [
                 { speaker: 'Alex', text: 'O monumento central está em pedaços... "Lei Áurea, 1888".' },
-                { speaker: 'Clio', text: 'A memória da abolição é a mais atacada pelas mentiras. Busque a verdade em São Paulo.' },
+                { speaker: 'Arasy', text: 'De todas as memórias, esta é a mais ferida pelas mentiras. Fala da escravidão e de sua queda.' },
+                { speaker: 'Arasy', text: 'Busque a verdade em São Paulo. O povo que sofreu merece ser lembrado como foi.' },
             ],
             restored: [
                 { speaker: 'Alex', text: 'O monumento da Lei Áurea, inteiro outra vez!' },
-                { speaker: 'Clio', text: 'A luta dos escravizados e abolicionistas conquistou a lei — e o abandono que veio depois também é História.' },
+                { speaker: 'Arasy', text: 'A abolição não foi um presente de uma princesa: foi arrancada por anos de fuga, revolta e luta dos escravizados e abolicionistas.' },
+                { speaker: 'Arasy', text: 'E o abandono que veio depois — sem terra, sem trabalho, sem escola — também é História, e também precisa ser lembrado.' },
             ],
         },
     });

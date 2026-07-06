@@ -39,7 +39,7 @@ export class GameState {
         this.talkedToTeacher   = false;
         this.talkedToLibrarian = false;
         this.bookFound         = false;
-        this.clioMet           = false;
+        this.arasyMet          = false;
         this.collectedInfos    = [];      // acumula TODOS os atos (diário)
         this.puzzleAttempts    = 0;
         this.gameWon           = false;

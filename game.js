@@ -631,7 +631,7 @@ class GameState {
         this.talkedToTeacher   = false;
         this.talkedToLibrarian = false;
         this.bookFound         = false;
-        this.clioMet           = false;
+        this.arasyMet          = false;
         this.collectedInfos    = [];      // acumula TODOS os atos (diário)
         this.puzzleAttempts    = 0;
         this.gameWon           = false;
@@ -960,7 +960,7 @@ const SaveSystem = {
                     talkedToTeacher   : gameState.talkedToTeacher,
                     talkedToLibrarian : gameState.talkedToLibrarian,
                     bookFound         : gameState.bookFound,
-                    clioMet           : gameState.clioMet,
+                    arasyMet          : gameState.arasyMet,
                     puzzleAttempts    : gameState.puzzleAttempts,
                     gameWon           : gameState.gameWon,
                     infoIds           : gameState.collectedInfos.map(i => i.id),
@@ -1022,7 +1022,7 @@ const SaveSystem = {
         gameState.talkedToTeacher   = !!state.talkedToTeacher;
         gameState.talkedToLibrarian = !!state.talkedToLibrarian;
         gameState.bookFound         = !!state.bookFound;
-        gameState.clioMet           = !!state.clioMet;
+        gameState.arasyMet          = !!(state.arasyMet ?? state.clioMet);
         gameState.puzzleAttempts    = Number.isInteger(state.puzzleAttempts) ? state.puzzleAttempts : 0;
         gameState.gameWon           = !!state.gameWon;
 
@@ -1329,7 +1329,7 @@ class NPC {
         const nameLower = this.name.toLowerCase();
         
         let isFemale = nameLower.includes('professora') || nameLower.includes('bibliotecaria') || 
-                       nameLower.includes('baronesa') || nameLower.includes('duquesa') || nameLower.includes('clio');
+                       nameLower.includes('baronesa') || nameLower.includes('duquesa') || nameLower.includes('arasy');
         let isNoble = nameLower.includes('aristocrata') || nameLower.includes('fazendeiro') || 
                       nameLower.includes('senador') || nameLower.includes('deodoro') || nameLower.includes('negociador');
         let isSoldier = nameLower.includes('guarda') || nameLower.includes('soldado');
@@ -1583,7 +1583,7 @@ class NPC {
      * Caixa usada para detectar interação (checkInteraction) e para o overlay
      * de debug (F3). Por padrão é a própria x/y/width/height do NPC — correto
      * para o desenho pixelart genérico, que preenche essa caixa. Subclasses com
-     * desenho próprio cujo visual real não coincide com essa caixa (ex.: Clio)
+     * desenho próprio cujo visual real não coincide com essa caixa (ex.: Arasy)
      * devem sobrescrever este método para refletir as dimensões reais desenhadas.
      */
     getDetectionBox() {
@@ -1838,10 +1838,14 @@ class Player {
     }
 }
 
-// ═══════ src/entities/Clio.js ═══════
+// ═══════ src/entities/Arasy.js ═══════
 
 /**
- * Clio — a guardiã indígena da memória histórica do Brasil.
+ * Arasy — a guardiã indígena da memória histórica do Brasil.
+ *
+ * Nome tupi-guarani: de "ara" (dia, tempo, céu) + "sy" (mãe, origem) — "mãe do
+ * tempo/do dia", figura da mitologia guarani ligada à criação do mundo. Aqui,
+ * a que guarda o tempo e a memória do povo brasileiro.
  *
  * Representada como uma mulher INDÍGENA brasileira, desenhada em pixel art
  * procedural (não depende de spritesheet): pele morena, cabelo liso preto,
@@ -1850,7 +1854,7 @@ class Player {
  * e as partículas representam a "memória viva" que ela protege — não é um
  * anjo nem uma figura mitológica europeia.
  */
-class Clio extends NPC {
+class Arasy extends NPC {
 
     static PALETTE = Object.freeze({
         skin        : '#8d5a3b',
@@ -1871,7 +1875,7 @@ class Clio extends NPC {
     });
 
     constructor(x, y) {
-        super(x, y, { name: 'Clio', width: 18, height: 30 });
+        super(x, y, { name: 'Arasy', width: 18, height: 30 });
         this.glowTimer = 0;
         this.particles = Array.from({ length: 10 }, () => this._createParticle());
         this.hasBeenIntroduced = false;
@@ -1921,7 +1925,7 @@ class Clio extends NPC {
 
     /** Pixel art da guardiã indígena (18x30, ancorada em this.x/this.y). */
     _drawGuardian(ctx, bob) {
-        const P  = Clio.PALETTE;
+        const P  = Arasy.PALETTE;
         const x  = this.x;
         const y  = this.y + bob;
         const cx = x + this.width / 2;
@@ -2243,7 +2247,7 @@ class MagicBook extends Interactable {
 // ═══════ src/entities/PhaseStatue.js ═══════
 
 /**
- * PhaseStatue — estátua comemorativa de um ato no Templo de Clio.
+ * PhaseStatue — estátua comemorativa de um ato no Templo de Arasy.
  *
  * Estado visual derivado do GameState (nunca duplicado localmente):
  *  - Ato pendente  → estátua quebrada (busto rachado, entulho na base)
@@ -2260,11 +2264,13 @@ class PhaseStatue extends Interactable {
             accent: '#c62828',
             broken: [
                 { speaker: 'Alex', text: 'Uma estátua em ruínas... A placa diz: "Inconfidência Mineira, 1789".' },
-                { speaker: 'Clio', text: 'A névoa de mentiras corrói a memória de Vila Rica. Restaure a verdade para reerguê-la.' },
+                { speaker: 'Arasy', text: 'Este tótem guarda Vila Rica. Onde o ouro corria, corriam também impostos que sufocavam o povo.' },
+                { speaker: 'Arasy', text: 'A névoa das mentiras rachou a pedra. Devolva a verdade à terra e o tótem se reerguerá.' },
             ],
             restored: [
                 { speaker: 'Alex', text: 'A estátua da Inconfidência Mineira, restaurada e reluzente!' },
-                { speaker: 'Clio', text: 'A Derrama acendeu a revolta; a traição de Silvério dos Reis a apagou. A verdade está preservada.' },
+                { speaker: 'Arasy', text: 'A cobrança da Derrama acendeu a revolta; a traição de Silvério dos Reis a apagou.' },
+                { speaker: 'Arasy', text: 'Tiradentes virou símbolo — mas foram gente comum, de carne e coragem, que sonharam liberdade. Isto a pedra agora lembra.' },
             ],
         },
         2: {
@@ -2272,11 +2278,13 @@ class PhaseStatue extends Interactable {
             accent: '#1565C0',
             broken: [
                 { speaker: 'Alex', text: 'Esta estátua está partida ao meio... "Proclamação da República, 1889".' },
-                { speaker: 'Clio', text: 'Os boatos de 1889 ainda distorcem a História. Desvende-os no Rio de Janeiro.' },
+                { speaker: 'Arasy', text: 'Aqui repousa a memória do fim do Império. Os boatos de 1889 ainda a distorcem.' },
+                { speaker: 'Arasy', text: 'Vá ao Rio de Janeiro e separe o que aconteceu daquilo que só foi rumor.' },
             ],
             restored: [
                 { speaker: 'Alex', text: 'A estátua da República brilha novamente!' },
-                { speaker: 'Clio', text: 'Militares, Igreja e cafeicultores derrubaram o Império — e a verdade resistiu aos boatos.' },
+                { speaker: 'Arasy', text: 'Militares, Igreja e cafeicultores, cada um por seu motivo, derrubaram a Monarquia.' },
+                { speaker: 'Arasy', text: 'Não foi um passe de mágica nem obra de um só homem: foi o peso de muitos descontentamentos. A verdade resistiu aos boatos.' },
             ],
         },
         3: {
@@ -2284,11 +2292,13 @@ class PhaseStatue extends Interactable {
             accent: '#c9a227',
             broken: [
                 { speaker: 'Alex', text: 'O monumento central está em pedaços... "Lei Áurea, 1888".' },
-                { speaker: 'Clio', text: 'A memória da abolição é a mais atacada pelas mentiras. Busque a verdade em São Paulo.' },
+                { speaker: 'Arasy', text: 'De todas as memórias, esta é a mais ferida pelas mentiras. Fala da escravidão e de sua queda.' },
+                { speaker: 'Arasy', text: 'Busque a verdade em São Paulo. O povo que sofreu merece ser lembrado como foi.' },
             ],
             restored: [
                 { speaker: 'Alex', text: 'O monumento da Lei Áurea, inteiro outra vez!' },
-                { speaker: 'Clio', text: 'A luta dos escravizados e abolicionistas conquistou a lei — e o abandono que veio depois também é História.' },
+                { speaker: 'Arasy', text: 'A abolição não foi um presente de uma princesa: foi arrancada por anos de fuga, revolta e luta dos escravizados e abolicionistas.' },
+                { speaker: 'Arasy', text: 'E o abandono que veio depois — sem terra, sem trabalho, sem escola — também é História, e também precisa ser lembrado.' },
             ],
         },
     });
@@ -2434,6 +2444,111 @@ class PhaseStatue extends Interactable {
         ctx.arc(cx, cy, 24, 0, Math.PI * 2);
         ctx.fill();
         ctx.restore();
+    }
+}
+
+// ═══════ src/entities/SacredSpring.js ═══════
+/**
+ * SacredSpring — vitórias-régias e um fio de cachoeira desenhados sobre um
+ * poço d'água (o tile de poço vem de farming.png, reaproveitado da Vila Rica).
+ *
+ * Puramente decorativo (sem colisão nem interação própria): dá vida ao domínio
+ * natural de Arasy. A vitória-régia e a cachoeira são desenhadas em código
+ * porque não existe um tile equivalente nos tilesets reaproveitáveis do
+ * projeto — segue a mesma técnica procedural de Arasy e das estátuas.
+ *
+ * Ancorada no centro do poço (cx, cy). O z-order usa a própria posição, de
+ * modo que a folhagem fica sobre a água mas atrás do altar/personagens.
+ */
+class SacredSpring {
+    constructor(cx, cy) {
+        this.cx = cx;
+        this.cy = cy;
+        // Caixa fictícia só para o painter's sort (y crescente = mais à frente).
+        this.x = cx - 20;
+        this.y = cy;
+        this.width = 40;
+        this.height = 0;
+        this.t = Math.random() * 6;
+        this.pads = [
+            { dx: -11, dy: -4, r: 8 },
+            { dx:  10, dy:  1, r: 7 },
+            { dx:  -1, dy:  8, r: 6, flower: true },
+        ];
+    }
+
+    update(dt) { this.t += dt; }
+
+    draw(ctx) {
+        const cx = this.cx, cy = this.cy;
+
+        // ── Fio de cachoeira caindo para o poço (curto, para não invadir o
+        //    frontão monumental que fica logo acima do poço da esquerda) ──
+        const top = cy - 28, bot = cy - 14;
+        ctx.save();
+        for (let i = 0; i < 3; i++) {
+            const off = (i - 1) * 2.6;
+            ctx.strokeStyle = i === 1 ? 'rgba(238,251,255,0.9)' : 'rgba(150,205,225,0.65)';
+            ctx.lineWidth = i === 1 ? 2 : 1.2;
+            ctx.beginPath();
+            ctx.moveTo(cx + off, top);
+            ctx.lineTo(cx + off + Math.sin(this.t * 3 + i) * 0.8, bot);
+            ctx.stroke();
+        }
+        // Espuma na base do fio d'água
+        ctx.fillStyle = 'rgba(240,252,255,0.85)';
+        for (let i = 0; i < 5; i++) {
+            const a = this.t * 2 + i * 1.3;
+            ctx.beginPath();
+            ctx.arc(cx + Math.cos(a) * 4.5, bot + Math.abs(Math.sin(a)) * 2, 1.1, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        ctx.restore();
+
+        // ── Vitórias-régias flutuando ──
+        for (const p of this.pads) {
+            const px = cx + p.dx;
+            const py = cy + p.dy + Math.sin(this.t * 1.5 + p.dx) * 0.6;
+
+            // Disco da folha
+            ctx.fillStyle = '#2f7d3a';
+            ctx.beginPath();
+            ctx.ellipse(px, py, p.r, p.r * 0.72, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#3c9648';
+            ctx.beginPath();
+            ctx.ellipse(px, py - 0.8, p.r * 0.78, p.r * 0.52, 0, 0, Math.PI * 2);
+            ctx.fill();
+            // Borda erguida característica da vitória-régia
+            ctx.strokeStyle = '#245e2c';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.ellipse(px, py, p.r, p.r * 0.72, 0, 0, Math.PI * 2);
+            ctx.stroke();
+            // Nervuras radiais
+            ctx.strokeStyle = 'rgba(22,72,32,0.45)';
+            ctx.lineWidth = 0.5;
+            for (let a = 0; a < Math.PI * 2; a += Math.PI / 4) {
+                ctx.beginPath();
+                ctx.moveTo(px, py);
+                ctx.lineTo(px + Math.cos(a) * p.r * 0.9, py + Math.sin(a) * p.r * 0.66);
+                ctx.stroke();
+            }
+
+            if (p.flower) {
+                ctx.fillStyle = '#e58fb0';
+                for (let a = 0; a < Math.PI * 2; a += Math.PI / 3) {
+                    ctx.beginPath();
+                    ctx.ellipse(px + Math.cos(a) * 1.9, py - 1 + Math.sin(a) * 1.9,
+                                1.2, 0.7, a, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+                ctx.fillStyle = '#f6ecf1';
+                ctx.beginPath(); ctx.arc(px, py - 1, 1.5, 0, Math.PI * 2); ctx.fill();
+                ctx.fillStyle = '#e6b422';
+                ctx.beginPath(); ctx.arc(px, py - 1, 0.8, 0, Math.PI * 2); ctx.fill();
+            }
+        }
     }
 }
 
@@ -3067,7 +3182,7 @@ class ReturnButton {
 // ═══════ src/ui/PuzzleUI.js ═══════
 
 /**
- * PuzzleUI — o Desafio de Clio.
+ * PuzzleUI — o Desafio de Arasy.
  *
  * O jogador escolhe, entre as informações coletadas na fase ATUAL,
  * qual deu INÍCIO e qual marcou o FIM do movimento histórico.
@@ -3238,14 +3353,14 @@ class PuzzleUI {
         ctx.textAlign = 'center';
         ctx.fillStyle = COLORS.gold;
         ctx.font = font(26, { bold: true });
-        ctx.fillText('🏛️  O DESAFIO DE CLIO  🏛️', W / 2, 110);
+        ctx.fillText('🏛️  O DESAFIO DE ARASY  🏛️', W / 2, 110);
 
         ctx.fillStyle = COLORS.parchment;
         ctx.font = font(17);
         const lines = [
             'Você coletou as informações históricas desta época.',
             '',
-            'Agora, Clio precisa que você identifique:',
+            'Agora, Arasy precisa que você identifique:',
             '',
             '1. A informação que DEU INÍCIO ao movimento',
             '2. A informação que ENCERROU o movimento',
@@ -3612,7 +3727,7 @@ class ControlsScreen {
         { keys: 'J',                   action: 'Abrir ou fechar o diário' },
         { keys: '← → (no diário)',     action: 'Trocar de página do diário' },
         { keys: '↑ ↓ (diário/escolhas)', action: 'Navegar entre opções' },
-        { keys: 'Mouse (clique)',      action: 'Selecionar cartas no Desafio de Clio' },
+        { keys: 'Mouse (clique)',      action: 'Selecionar cartas no Desafio de Arasy' },
         { keys: 'T',                   action: 'Voltar ao Templo (quando disponível)' },
         { keys: 'M',                   action: 'Ativar ou desativar o som' },
         { keys: 'H',                   action: 'Abrir ou fechar esta tela de ajuda' },
@@ -3721,6 +3836,7 @@ class ControlsScreen {
 
 
 
+
 // ═══════════════════════════════════════════════════════════════
 // CANVAS & SISTEMAS GLOBAIS
 // ═══════════════════════════════════════════════════════════════
@@ -3771,49 +3887,49 @@ const ACTS = Object.freeze({
     1: {
         scene : 'vila_rica',
         label : 'Vila Rica — 1789',
-        clioBrief: [
-            { speaker: 'Clio', text: 'Você coletou todas as informações! Agora é hora do desafio.' },
-            { speaker: 'Clio', text: 'Identifique: qual informação deu INÍCIO ao movimento e qual ENCERROU.' },
-            { speaker: 'Clio', text: 'Concentre-se... a névoa de mentiras é traiçoeira.' },
+        arasyBrief: [
+            { speaker: 'Arasy', text: 'Você trouxe de volta as memórias de Vila Rica. Sinto a terra mais firme sob nossos pés.' },
+            { speaker: 'Arasy', text: 'Agora ponha ordem no tempo: qual fato deu INÍCIO à revolta e qual a ENCERROU?' },
+            { speaker: 'Arasy', text: 'Vá com calma. A névoa das mentiras é astuta — ela mistura o que foi com o que só disseram que foi.' },
         ],
         successLines: [
-            { speaker: 'Clio', text: '🎉 Você dissipou a névoa! A verdade sobre a Inconfidência Mineira está segura!' },
-            { speaker: 'Clio', text: 'A Derrama provocou a revolta, e a traição de Silvério dos Reis a encerrou.' },
-            { speaker: 'Clio', text: 'Veja! A primeira estátua do templo foi restaurada com a força da verdade!' },
-            { speaker: 'Alex', text: 'Isso foi incrível! E agora?' },
-            { speaker: 'Clio', text: 'Sua missão continua no Império do Brasil... Prepare-se para o Rio de Janeiro!' },
+            { speaker: 'Arasy', text: '🎉 A névoa se desfez! A verdade da Inconfidência Mineira está de novo protegida.' },
+            { speaker: 'Arasy', text: 'A cobrança da Derrama acendeu a revolta; a traição de Silvério dos Reis a apagou.' },
+            { speaker: 'Arasy', text: 'Olhe: o primeiro tótem se reergueu. A memória de um povo é assim — quando cuidada, volta a ficar de pé.' },
+            { speaker: 'Alex', text: 'Foi incrível sentir isso! E agora, Arasy?' },
+            { speaker: 'Arasy', text: 'O rio do tempo segue. Leve seus olhos atentos ao Rio de Janeiro, onde um Império chega ao fim.' },
         ],
     },
     2: {
         scene : 'rio_de_janeiro',
         label : 'Rio de Janeiro — 1889',
-        clioBrief: [
-            { speaker: 'Clio', text: 'Você coletou as informações sobre a República no Rio de Janeiro!' },
-            { speaker: 'Clio', text: 'Identifique: qual fato deu INÍCIO ao movimento e qual consolidou o FIM do Império.' },
-            { speaker: 'Clio', text: 'Pense bem... a desinformação e os boatos eram muito fortes nessa época.' },
+        arasyBrief: [
+            { speaker: 'Arasy', text: 'Trouxe as vozes do Rio de Janeiro. Aqui um Império inteiro se despede.' },
+            { speaker: 'Arasy', text: 'Ordene o tempo: qual fato deu INÍCIO à queda e qual consolidou o FIM da Monarquia?' },
+            { speaker: 'Arasy', text: 'Cuidado: nesta época os boatos corriam mais rápido que a verdade. Escute a terra, não o eco.' },
         ],
         successLines: [
-            { speaker: 'Clio', text: '🎉 Incrível, Alex! Você dissipou a névoa da Proclamação da República!' },
-            { speaker: 'Clio', text: 'A insatisfação dos três grupos começou a queda, e o exílio da família real encerrou a Monarquia.' },
-            { speaker: 'Clio', text: 'A segunda estátua reergueu-se! O templo recupera sua glória.' },
-            { speaker: 'Alex', text: 'Sinto que entendi muito melhor como nossa República começou.' },
-            { speaker: 'Clio', text: 'Há um último foco de névoa: São Paulo, 1888 — a verdade sobre a Lei Áurea.' },
+            { speaker: 'Arasy', text: '🎉 A névoa da Proclamação da República se dissipou, Alex!' },
+            { speaker: 'Arasy', text: 'O descontentamento de militares, Igreja e cafeicultores abriu a queda; o exílio da família real encerrou a Monarquia.' },
+            { speaker: 'Arasy', text: 'O segundo tótem se reergueu. Nossos antepassados agradecem quem cuida da lembrança deles.' },
+            { speaker: 'Alex', text: 'Agora entendo que a República não nasceu de um dia só.' },
+            { speaker: 'Arasy', text: 'Resta uma ferida funda a curar: São Paulo, 1888. A memória da abolição.' },
         ],
     },
     3: {
         scene : 'sao_paulo',
         label : 'São Paulo — 1888',
-        clioBrief: [
-            { speaker: 'Clio', text: 'Você coletou as informações sobre a Lei Áurea em São Paulo!' },
-            { speaker: 'Clio', text: 'Identifique: qual fato deu INÍCIO ao movimento abolicionista e qual representou as consequências pós-abolição.' },
-            { speaker: 'Clio', text: 'A desinformação também distorceu muito esse momento marcante da nossa história.' },
+        arasyBrief: [
+            { speaker: 'Arasy', text: 'Você recolheu as memórias de São Paulo, 1888. Segure-as com respeito: elas custaram muito sofrimento.' },
+            { speaker: 'Arasy', text: 'Ordene o tempo: qual fato deu INÍCIO à luta abolicionista e qual mostra o que veio DEPOIS da abolição?' },
+            { speaker: 'Arasy', text: 'É aqui que a névoa mais mente. Deixe a verdade falar mais alto que o conto bonito.' },
         ],
         successLines: [
-            { speaker: 'Clio', text: '🎉 Excelente, Alex! A verdade sobre a Lei Áurea foi reestabelecida!' },
-            { speaker: 'Clio', text: 'A luta popular forçou a abolição, e a falta de amparo social marcou suas consequências.' },
-            { speaker: 'Clio', text: 'O monumento central renasceu — as três estátuas brilham juntas novamente!' },
-            { speaker: 'Alex', text: 'Conseguimos! Agora posso voltar para a biblioteca e entregar meu trabalho?' },
-            { speaker: 'Clio', text: 'Sim, Alex. O portal o guiará de volta. Sua professora o aguarda para avaliar o seu aprendizado!' },
+            { speaker: 'Arasy', text: '🎉 A verdade da Lei Áurea foi restaurada, Alex.' },
+            { speaker: 'Arasy', text: 'A luta e a resistência do povo escravizado forçaram a abolição; o abandono que se seguiu foi a ferida que ninguém curou.' },
+            { speaker: 'Arasy', text: 'O tótem central renasceu — os três brilham juntos. A memória do Brasil respira de novo.' },
+            { speaker: 'Alex', text: 'Conseguimos! Agora posso voltar à biblioteca e entregar meu trabalho?' },
+            { speaker: 'Arasy', text: 'Pode ir. O portal o levará de volta ao seu tempo. Sua professora o espera — leve com você tudo que aprendeu aqui.' },
         ],
     },
 });
@@ -3999,14 +4115,14 @@ function charSprite(rowName) {
 // FLUXO DO TEMPLO (puzzle com chances + retorno automático)
 // ═══════════════════════════════════════════════════════════════
 
-/** Diálogo padrão de Clio quando ainda faltam informações; devolve à fase. */
-function buildClioIncomplete(act) {
+/** Diálogo padrão de Arasy quando ainda faltam informações; devolve à fase. */
+function buildArasyIncomplete(act) {
     const total = gameState.getRequiredInfoCount();
     return {
         lines: [
-            { speaker: 'Clio', text: `Você coletou ${gameState.getInfoCount()} de ${total} informações de ${ACTS[act].label}.` },
-            { speaker: 'Clio', text: 'Ainda não posso abrir o desafio. Volte e converse com mais pessoas!' },
-            { speaker: 'Clio', text: 'Vou te enviar de volta. A verdade precisa de você!' },
+            { speaker: 'Arasy', text: `Você trouxe ${gameState.getInfoCount()} de ${total} memórias de ${ACTS[act].label}.` },
+            { speaker: 'Arasy', text: 'A lembrança ainda está incompleta — não posso abrir o desafio assim. Volte e escute mais gente.' },
+            { speaker: 'Arasy', text: 'Vou reabrir o caminho de volta. A verdade só se ergue com todas as vozes.' },
         ],
         onDone: () => loadScene(ACTS[act].scene),
     };
@@ -4040,8 +4156,8 @@ function onPuzzleWrong() {
 
     if (puzzleChancesLeft > 0) {
         dialogueBox.show([
-            { speaker: 'Clio', text: `A névoa te confundiu... Restam ${puzzleChancesLeft} tentativa(s).` },
-            { speaker: 'Clio', text: 'Respire fundo e tente de novo. Separe fatos de boatos!' },
+            { speaker: 'Arasy', text: `A névoa embaralhou o tempo... Ainda lhe restam ${puzzleChancesLeft} tentativa(s).` },
+            { speaker: 'Arasy', text: 'Respire fundo como quem escuta o vento. Separe o que foi do que só foi dito.' },
         ], startPuzzleWithChances);
         return;
     }
@@ -4049,50 +4165,53 @@ function onPuzzleWrong() {
     // Chances esgotadas: perde as infos da fase e volta para recoletá-las
     gameState.clearCurrentActInfos();
     dialogueBox.show([
-        { speaker: 'Clio', text: 'A névoa venceu desta vez... As informações se dissiparam da sua memória.' },
-        { speaker: 'Clio', text: 'Volte à época e reconstrua a verdade conversando com as pessoas.' },
+        { speaker: 'Arasy', text: 'A névoa venceu desta vez... e as memórias se dispersaram como fumaça.' },
+        { speaker: 'Arasy', text: 'Não é vergonha recomeçar. Volte àquele tempo e reconstrua a verdade, voz por voz.' },
     ], () => loadScene(ACTS[gameState.act].scene));
 }
 
-/** Monta a Clio do templo conforme o progresso. */
-function buildTemploClio(map) {
-    const deusa = map.mapObjects.find(o => o.name === 'deusa_item');
-    const clioX = deusa ? deusa.x + deusa.width / 2 - 9 : map.spawnPoint.x;
-    const clioY = deusa ? deusa.y + deusa.height - 26 : map.spawnPoint.y - 80;
-    const clio  = new Clio(clioX, clioY);
+/** Monta a Arasy do templo conforme o progresso. */
+function buildTemploArasy(map) {
+    const deusa  = map.mapObjects.find(o => o.name === 'deusa_item');
+    const arasyX = deusa ? deusa.x + deusa.width / 2 - 9 : map.spawnPoint.x;
+    const arasyY = deusa ? deusa.y + deusa.height - 26 : map.spawnPoint.y - 80;
+    const arasy  = new Arasy(arasyX, arasyY);
 
-    if (!gameState.clioMet) {
-        clio.dialogueLines = [
-            { speaker: 'Clio', text: 'Finalmente... Alguém me encontrou depois de tantos séculos.' },
-            { speaker: 'Alex', text: 'Onde eu estou?! O que aconteceu?!' },
-            { speaker: 'Clio', text: 'Eu sou Clio, a guardiã da memória. Este templo existe fora do tempo.' },
-            { speaker: 'Clio', text: 'Vê estas estátuas quebradas? Cada uma guarda um período da história do Brasil.' },
-            { speaker: 'Clio', text: 'O passado está sendo apagado por uma névoa de mentiras. Fake news, Alex — elas existem desde sempre.' },
-            { speaker: 'Clio', text: 'Restaure a verdade e as estátuas se reerguerão. Comece em Vila Rica, 1789: a Inconfidência Mineira.' },
-            { speaker: 'Clio', text: 'Converse com as pessoas. Colete informações. Mas cuidado — nem tudo que ouvir é verdade. Vá agora!' },
+    if (!gameState.arasyMet) {
+        arasy.dialogueLines = [
+            { speaker: 'Arasy', text: 'Aproxime-se sem medo. A água e a pedra já sabiam que você viria.' },
+            { speaker: 'Alex', text: 'Onde... onde eu estou? Como cheguei aqui?' },
+            { speaker: 'Arasy', text: 'Eu sou Arasy. Meu nome vem de "ara", o tempo, e "sy", a mãe. Sou a que guarda a memória desta terra.' },
+            { speaker: 'Arasy', text: 'Este é o templo onde vive tudo o que o Brasil já foi. Muito antes das cidades, meu povo já contava estas histórias ao redor do fogo.' },
+            { speaker: 'Alex', text: 'E esses tótens de pedra quebrados?' },
+            { speaker: 'Arasy', text: 'Cada um guarda um tempo da nossa história. Uma névoa de mentiras — o que hoje vocês chamam de fake news — está rachando a memória do povo.' },
+            { speaker: 'Arasy', text: 'Mentira não é coisa nova, criança. Ela sempre tentou apagar quem lutou, quem sofreu, quem construiu. Cabe a nós lembrar direito.' },
+            { speaker: 'Arasy', text: 'Comece por Vila Rica, 1789: a Inconfidência Mineira. Escute as pessoas, junte as memórias — mas peneire, pois nem toda voz diz a verdade.' },
+            { speaker: 'Alex', text: 'Pode contar comigo, Arasy.' },
+            { speaker: 'Arasy', text: 'Então vá. A terra caminha com você.' },
         ];
-        clio.onInteractComplete = () => {
-            gameState.clioMet = true;
+        arasy.onInteractComplete = () => {
+            gameState.arasyMet = true;
             loadScene(ACTS[1].scene);
         };
-        return clio;
+        return arasy;
     }
 
-    clio.hasBeenIntroduced = true;
+    arasy.hasBeenIntroduced = true;
 
     if (gameState.hasAllInfos()) {
-        clio.dialogueLines = ACTS[gameState.act].clioBrief;
-        clio.onInteractComplete = () => {
+        arasy.dialogueLines = ACTS[gameState.act].arasyBrief;
+        arasy.onInteractComplete = () => {
             puzzleChancesLeft = PUZZLE_MAX_CHANCES;
             startPuzzleWithChances();
         };
     } else {
-        const { lines, onDone } = buildClioIncomplete(gameState.act);
-        clio.dialogueLines = lines;
-        clio.onInteractComplete = onDone;
-        clio.afterDialogueLines = lines;   // sempre devolve à fase
+        const { lines, onDone } = buildArasyIncomplete(gameState.act);
+        arasy.dialogueLines = lines;
+        arasy.onInteractComplete = onDone;
+        arasy.afterDialogueLines = lines;   // sempre devolve à fase
     }
-    return clio;
+    return arasy;
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -4301,7 +4420,7 @@ const SCENES = {
     },
 
     // ─────────────────────────────────────────────
-    // TEMPLO (hub temporal — Clio + estátuas das fases)
+    // TEMPLO (hub temporal — Arasy + estátuas das fases)
     // ─────────────────────────────────────────────
     templo: {
         file: 'templo.tmj',
@@ -4315,7 +4434,7 @@ const SCENES = {
             infoPanel.active = false;
             puzzleChancesLeft = PUZZLE_MAX_CHANCES;
 
-            // Estátuas das três fases (quebradas → restauradas)
+            // Estátuas das três fases (quebradas → restauradas) — já interativas (lore)
             for (const act of [1, 2, 3]) {
                 const obj = map.mapObjects.find(o => o.name === `estatua_fase${act}`);
                 if (obj) {
@@ -4325,10 +4444,41 @@ const SCENES = {
                 }
             }
 
-            interactables.push(buildTemploClio(map));
+            // Domínio natural de Arasy: vitórias-régias + fio de cachoeira sobre os
+            // dois poços d'água (tiles reaproveitados de farming.png / Vila Rica).
+            interactables.push(new SacredSpring(416, 128));
+            interactables.push(new SacredSpring(576, 128));
+
+            // Tomos dourados: livros-monumento interativos com pequenas lores da
+            // memória histórica (tile do "livro mágico" reaproveitado). Posições
+            // casam com os tiles de livro colocados em templo.tmj.
+            const TOMOS = [
+                { x: 192, y: 192, name: 'Tomo dos Primeiros Povos',
+                  text: 'Muito antes de 1500, milhares de povos indígenas já viviam, comerciavam e guardavam suas histórias nesta terra.' },
+                { x: 736, y: 192, name: 'Tomo da Terra Rica',
+                  text: 'Chamaram o Brasil de "terra rica" pelo ouro e pelo açúcar — mas a maior riqueza sempre foi a sua gente e a sua memória.' },
+                { x: 192, y: 384, name: 'Tomo das Vozes Silenciadas',
+                  text: 'Por séculos, a história foi contada só pelos poderosos. Este tomo guarda as vozes que tentaram apagar.' },
+                { x: 736, y: 384, name: 'Tomo do Guardião',
+                  text: 'Guardar a memória é dever sagrado: lembrar como as coisas de fato aconteceram é a defesa contra a névoa das mentiras.' },
+            ];
+            for (const t of TOMOS) {
+                interactables.push(new Interactable(t.x, t.y, {
+                    name: t.name,
+                    width: 32, height: 32,
+                    visible: true, glow: true,
+                    glowColor: 'rgba(230, 180, 60, 0.5)',
+                    dialogueLines: [
+                        { speaker: 'Alex', text: 'Um tomo antigo, aberto numa página que reluz como ouro...' },
+                        { speaker: t.name, text: t.text },
+                    ],
+                }));
+            }
+
+            interactables.push(buildTemploArasy(map));
 
             // Portal dinâmico para a fase atual
-            if (gameState.clioMet && !gameState.gameWon) {
+            if (gameState.arasyMet && !gameState.gameWon) {
                 const target = ACTS[gameState.act];
                 interactables.push(new Interactable(map.spawnPoint.x - 20, map.spawnPoint.y + 16, {
                     name: `Portal ${target.label}`,
@@ -4783,15 +4933,15 @@ const SCENES = {
 
             setTimeout(() => {
                 dialogueBox.show([
-                    { speaker: 'Clio', text: 'Olhe, Alex... as três estátuas não estão mais quebradas.' },
-                    { speaker: 'Clio', text: 'Cada uma guarda uma verdade que você ajudou a proteger da névoa das fake news.' },
-                    { speaker: 'Clio', text: 'Em 1789, mineiros comuns enfrentaram impostos injustos — não por lendas mágicas, mas por coragem diante da injustiça.' },
-                    { speaker: 'Clio', text: 'Em 1889, grupos poderosos mudaram os rumos do país, e um império inteiro terminou em poucos dias.' },
-                    { speaker: 'Clio', text: 'Em 1888, anos de luta e resistência venceram a escravidão — mas o Brasil ainda deve muito a quem foi libertado sem terra, trabalho ou estudo.' },
-                    { speaker: 'Clio', text: 'A história de verdade nem sempre é a mais fácil de acreditar. Mas ela merece ser lembrada como realmente aconteceu.' },
-                    { speaker: 'Alex', text: 'Aprendi que separar fato de boato não é só sobre o passado... é sobre prestar atenção sempre, em tudo que a gente ouve.' },
-                    { speaker: 'Clio', text: 'Essa é a missão de todo guardião da memória, Alex. Obrigada por cumprir a sua.' },
-                    { speaker: 'Clio', text: 'Vá em paz — e continue curioso.' },
+                    { speaker: 'Arasy', text: 'Olhe, Alex... os três tótens estão inteiros de novo. A terra respira aliviada.' },
+                    { speaker: 'Arasy', text: 'Cada um guarda uma verdade que você protegeu da névoa das fake news.' },
+                    { speaker: 'Arasy', text: 'Em 1789, gente comum de Vila Rica enfrentou impostos injustos — não por lendas mágicas, mas por coragem diante da injustiça.' },
+                    { speaker: 'Arasy', text: 'Em 1889, muitos descontentamentos derrubaram um Império inteiro em poucos dias — sem milagre, sem herói único.' },
+                    { speaker: 'Arasy', text: 'Em 1888, anos de fuga, revolta e resistência venceram a escravidão — mas o Brasil ainda deve muito a quem foi libertado sem terra, sem trabalho e sem escola.' },
+                    { speaker: 'Arasy', text: 'A verdade nem sempre é a história mais fácil de engolir. Mas é ela que merece ser lembrada, do jeito que de fato aconteceu.' },
+                    { speaker: 'Alex', text: 'Aprendi que separar fato de boato não é só sobre o passado... é prestar atenção sempre, em tudo que a gente ouve.' },
+                    { speaker: 'Arasy', text: 'Essa é a missão de todo guardião da memória, Alex. Agora você também é um deles.' },
+                    { speaker: 'Arasy', text: 'Vá em paz, criança do futuro — e continue curioso. A terra caminha com você.' },
                 ], () => endingScreen.show());
             }, 500);
         },
@@ -4924,7 +5074,7 @@ function setupPortraits() {
     dialogueBox.portraits = {
         'Professora'         : P(CHAR_ROWS.professora),
         'Bibliotecária'      : P(CHAR_ROWS.dama_flor),
-        'Clio'               : P(CHAR_ROWS.dama_coque),
+        'Arasy'              : P(CHAR_ROWS.dama_coque),
         'Vendedor'           : P(CHAR_ROWS.chapeu),
         'Mineiro'            : P(CHAR_ROWS.mineiro),
         'Espião'             : P(CHAR_ROWS.moreno),

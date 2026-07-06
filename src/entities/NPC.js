@@ -136,7 +136,7 @@ export class NPC {
         const nameLower = this.name.toLowerCase();
         
         let isFemale = nameLower.includes('professora') || nameLower.includes('bibliotecaria') || 
-                       nameLower.includes('baronesa') || nameLower.includes('duquesa') || nameLower.includes('clio');
+                       nameLower.includes('baronesa') || nameLower.includes('duquesa') || nameLower.includes('arasy');
         let isNoble = nameLower.includes('aristocrata') || nameLower.includes('fazendeiro') || 
                       nameLower.includes('senador') || nameLower.includes('deodoro') || nameLower.includes('negociador');
         let isSoldier = nameLower.includes('guarda') || nameLower.includes('soldado');
@@ -390,7 +390,7 @@ export class NPC {
      * Caixa usada para detectar interação (checkInteraction) e para o overlay
      * de debug (F3). Por padrão é a própria x/y/width/height do NPC — correto
      * para o desenho pixelart genérico, que preenche essa caixa. Subclasses com
-     * desenho próprio cujo visual real não coincide com essa caixa (ex.: Clio)
+     * desenho próprio cujo visual real não coincide com essa caixa (ex.: Arasy)
      * devem sobrescrever este método para refletir as dimensões reais desenhadas.
      */
     getDetectionBox() {

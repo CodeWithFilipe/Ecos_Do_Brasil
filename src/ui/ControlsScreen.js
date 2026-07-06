@@ -15,7 +15,7 @@ export class ControlsScreen {
         { keys: 'J',                   action: 'Abrir ou fechar o diário' },
         { keys: '← → (no diário)',     action: 'Trocar de página do diário' },
         { keys: '↑ ↓ (diário/escolhas)', action: 'Navegar entre opções' },
-        { keys: 'Mouse (clique)',      action: 'Selecionar cartas no Desafio de Clio' },
+        { keys: 'Mouse (clique)',      action: 'Selecionar cartas no Desafio de Arasy' },
         { keys: 'T',                   action: 'Voltar ao Templo (quando disponível)' },
         { keys: 'M',                   action: 'Ativar ou desativar o som' },
         { keys: 'H',                   action: 'Abrir ou fechar esta tela de ajuda' },

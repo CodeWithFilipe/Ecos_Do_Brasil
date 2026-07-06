@@ -19,12 +19,13 @@ SRC_ORDER = [
     'src/core/GameState.js',
     'src/core/SaveSystem.js',
     'src/core/AudioManager.js',
-    'src/entities/NPC.js',       # base de Player (colisao) e Clio (heranca)
+    'src/entities/NPC.js',       # base de Player (colisao) e Arasy (heranca)
     'src/entities/Player.js',
-    'src/entities/Clio.js',
+    'src/entities/Arasy.js',
     'src/entities/Interactable.js',
     'src/entities/MagicBook.js',
     'src/entities/PhaseStatue.js',
+    'src/entities/SacredSpring.js',
     'src/ui/DialogueBox.js',
     'src/ui/InfoPanel.js',
     'src/ui/JournalUI.js',

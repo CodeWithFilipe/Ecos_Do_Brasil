@@ -57,7 +57,7 @@ export const SaveSystem = {
                     talkedToTeacher   : gameState.talkedToTeacher,
                     talkedToLibrarian : gameState.talkedToLibrarian,
                     bookFound         : gameState.bookFound,
-                    clioMet           : gameState.clioMet,
+                    arasyMet          : gameState.arasyMet,
                     puzzleAttempts    : gameState.puzzleAttempts,
                     gameWon           : gameState.gameWon,
                     infoIds           : gameState.collectedInfos.map(i => i.id),
@@ -119,7 +119,7 @@ export const SaveSystem = {
         gameState.talkedToTeacher   = !!state.talkedToTeacher;
         gameState.talkedToLibrarian = !!state.talkedToLibrarian;
         gameState.bookFound         = !!state.bookFound;
-        gameState.clioMet           = !!state.clioMet;
+        gameState.arasyMet          = !!(state.arasyMet ?? state.clioMet);
         gameState.puzzleAttempts    = Number.isInteger(state.puzzleAttempts) ? state.puzzleAttempts : 0;
         gameState.gameWon           = !!state.gameWon;
 

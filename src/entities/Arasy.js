@@ -1,7 +1,11 @@
 import { NPC } from './NPC.js';
 
 /**
- * Clio — a guardiã indígena da memória histórica do Brasil.
+ * Arasy — a guardiã indígena da memória histórica do Brasil.
+ *
+ * Nome tupi-guarani: de "ara" (dia, tempo, céu) + "sy" (mãe, origem) — "mãe do
+ * tempo/do dia", figura da mitologia guarani ligada à criação do mundo. Aqui,
+ * a que guarda o tempo e a memória do povo brasileiro.
  *
  * Representada como uma mulher INDÍGENA brasileira, desenhada em pixel art
  * procedural (não depende de spritesheet): pele morena, cabelo liso preto,
@@ -10,7 +14,7 @@ import { NPC } from './NPC.js';
  * e as partículas representam a "memória viva" que ela protege — não é um
  * anjo nem uma figura mitológica europeia.
  */
-export class Clio extends NPC {
+export class Arasy extends NPC {
 
     static PALETTE = Object.freeze({
         skin        : '#8d5a3b',
@@ -31,7 +35,7 @@ export class Clio extends NPC {
     });
 
     constructor(x, y) {
-        super(x, y, { name: 'Clio', width: 18, height: 30 });
+        super(x, y, { name: 'Arasy', width: 18, height: 30 });
         this.glowTimer = 0;
         this.particles = Array.from({ length: 10 }, () => this._createParticle());
         this.hasBeenIntroduced = false;
@@ -81,7 +85,7 @@ export class Clio extends NPC {
 
     /** Pixel art da guardiã indígena (18x30, ancorada em this.x/this.y). */
     _drawGuardian(ctx, bob) {
-        const P  = Clio.PALETTE;
+        const P  = Arasy.PALETTE;
         const x  = this.x;
         const y  = this.y + bob;
         const cx = x + this.width / 2;
