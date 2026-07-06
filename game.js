@@ -1626,8 +1626,12 @@ class Player {
     /** facing → row na spritesheet de caminhada. */
     static DIR_ROW = [0, 2, 1, 1];
 
-    /** Distância máxima (px) do auxílio de quina. */
-    static CORNER_ASSIST_RANGE = 5;
+    /**
+     * Distância máxima (px) do auxílio de quina. Quanto maior, mais o jogador
+     * "desliza" para dentro de portas/passagens estreitas sem precisar alinhar
+     * pixel a pixel — reduz a sensação de travar na entrada/saída de locais.
+     */
+    static CORNER_ASSIST_RANGE = 9;
 
     constructor(x, y, config = {}) {
         this.x = x;
@@ -2108,6 +2112,11 @@ class Interactable {
         this.glowEnabled = config.glow === true;
         this.glowTimer   = 0;
         this.glowColor   = config.glowColor || 'rgba(255, 215, 0, 0.4)';
+
+        // Folga da área de detecção de interação (px por lado). Usado nas portas/
+        // transições para que a intenção de entrar seja reconhecida ao chegar
+        // perto da porta de qualquer direção razoável, sem alinhamento exato.
+        this.detectPad = config.detectPad || 0;
     }
 
     update(dt) {
@@ -2121,9 +2130,19 @@ class Interactable {
         };
     }
 
-    /** Ver NPC.getDetectionBox() — mesma ideia: caixa real usada para interação/debug. */
+    /**
+     * Ver NPC.getDetectionBox() — caixa real usada para interação/debug.
+     * Expandida por `detectPad` (folga) e mantida centrada na posição real do
+     * objeto, para portas/transições serem detectadas sem alinhamento exato.
+     */
     getDetectionBox() {
-        return { x: this.x, y: this.y, width: this.width, height: this.height };
+        const p = this.detectPad;
+        return {
+            x: this.x - p,
+            y: this.y - p,
+            width:  this.width  + p * 2,
+            height: this.height + p * 2,
+        };
     }
 
     draw(ctx) {
@@ -3941,6 +3960,14 @@ const SCENES_WITH_RETURN = new Set([
 
 const PUZZLE_MAX_CHANCES = 3;
 
+/**
+ * Folga (px por lado) da área de detecção de TODAS as portas/transições de mapa.
+ * Expande a caixa de detecção ao redor da posição real da porta para que o
+ * "Pressione E para entrar" seja reconhecido ao chegar perto de qualquer
+ * direção razoável, sem exigir alinhamento pixel-perfeito.
+ */
+const DOOR_DETECT_PAD = 16;
+
 // Música por cena
 const MUSIC_BY_SCENE = {
     biblioteca     : 'musica_biblioteca',
@@ -4290,6 +4317,7 @@ const SCENES = {
                 interactables.push(new MagicBook(diario.x, diario.y, {
                     name: 'Livro Antigo',
                     width: diario.width, height: diario.height,
+                    detectPad: DOOR_DETECT_PAD,
                     dialogueLines: [
                         { speaker: 'Alex', text: 'Esse deve ser o livro que a bibliotecária mencionou...' },
                         { speaker: 'Alex', text: 'Não tem título. Está emitindo um calor estranho...' },
@@ -4446,20 +4474,21 @@ const SCENES = {
 
             // Domínio natural de Arasy: vitórias-régias + fio de cachoeira sobre os
             // dois poços d'água (tiles reaproveitados de farming.png / Vila Rica).
-            interactables.push(new SacredSpring(416, 128));
-            interactables.push(new SacredSpring(576, 128));
+            // Posições casam com os poços 2x2 do templo.tmj compacto (centros).
+            interactables.push(new SacredSpring(256, 128));
+            interactables.push(new SacredSpring(448, 128));
 
             // Tomos dourados: livros-monumento interativos com pequenas lores da
             // memória histórica (tile do "livro mágico" reaproveitado). Posições
             // casam com os tiles de livro colocados em templo.tmj.
             const TOMOS = [
-                { x: 192, y: 192, name: 'Tomo dos Primeiros Povos',
+                { x: 160, y: 288, name: 'Tomo dos Primeiros Povos',
                   text: 'Muito antes de 1500, milhares de povos indígenas já viviam, comerciavam e guardavam suas histórias nesta terra.' },
-                { x: 736, y: 192, name: 'Tomo da Terra Rica',
+                { x: 512, y: 288, name: 'Tomo da Terra Rica',
                   text: 'Chamaram o Brasil de "terra rica" pelo ouro e pelo açúcar — mas a maior riqueza sempre foi a sua gente e a sua memória.' },
-                { x: 192, y: 384, name: 'Tomo das Vozes Silenciadas',
+                { x: 160, y: 384, name: 'Tomo das Vozes Silenciadas',
                   text: 'Por séculos, a história foi contada só pelos poderosos. Este tomo guarda as vozes que tentaram apagar.' },
-                { x: 736, y: 384, name: 'Tomo do Guardião',
+                { x: 512, y: 384, name: 'Tomo do Guardião',
                   text: 'Guardar a memória é dever sagrado: lembrar como as coisas de fato aconteceram é a defesa contra a névoa das mentiras.' },
             ];
             for (const t of TOMOS) {
@@ -4483,6 +4512,7 @@ const SCENES = {
                 interactables.push(new Interactable(map.spawnPoint.x - 20, map.spawnPoint.y + 16, {
                     name: `Portal ${target.label}`,
                     width: 40, height: 12,
+                    detectPad: DOOR_DETECT_PAD,
                     dialogueLines: [{ speaker: 'Alex', text: `[Viajar para ${target.label}]` }],
                     onInteractComplete: () => loadScene(target.scene),
                 }));
@@ -4554,6 +4584,7 @@ const SCENES = {
                     interactables.push(new Interactable(door.x, door.y, {
                         name: d.label,
                         width: door.width, height: door.height,
+                        detectPad: DOOR_DETECT_PAD,
                         dialogueLines: [{ speaker: 'Alex', text: `[Entrar: ${d.label}]` }],
                         onInteractComplete: () => loadScene(d.scene),
                     }));
@@ -4606,6 +4637,7 @@ const SCENES = {
                 interactables.push(new Interactable(saida.x, saida.y, {
                     name: 'Saída',
                     width: saida.width, height: saida.height,
+                    detectPad: DOOR_DETECT_PAD,
                     dialogueLines: [{ speaker: 'Alex', text: '[Voltar para a Vila Rica]' }],
                     onInteractComplete: () => {
                         nextSpawnDoor = 'porta_poeta';
@@ -4661,6 +4693,7 @@ const SCENES = {
                 interactables.push(new Interactable(saida.x, saida.y, {
                     name: 'Saída',
                     width: saida.width, height: saida.height,
+                    detectPad: DOOR_DETECT_PAD,
                     dialogueLines: [{ speaker: 'Alex', text: '[Voltar para a Vila Rica]' }],
                     onInteractComplete: () => {
                         nextSpawnDoor = 'porta_igreja';
@@ -4716,6 +4749,7 @@ const SCENES = {
                 interactables.push(new Interactable(saida.x, saida.y, {
                     name: 'Saída',
                     width: saida.width, height: saida.height,
+                    detectPad: DOOR_DETECT_PAD,
                     dialogueLines: [{ speaker: 'Alex', text: '[Voltar para a Vila Rica]' }],
                     onInteractComplete: () => {
                         nextSpawnDoor = 'porta_taverna';
@@ -5404,6 +5438,7 @@ function checkSpawnTemploPortal() {
         name: 'Portal Templo',
         width: portalObj ? portalObj.width : 30,
         height: portalObj ? portalObj.height : 14,
+        detectPad: DOOR_DETECT_PAD,
         visible: true, glow: true, isItem: true,
         glowColor: 'rgba(180, 130, 255, 0.6)',
         dialogueLines: [{ speaker: 'Alex', text: '[Voltar ao Templo com as informações]' }],

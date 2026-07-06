@@ -18,8 +18,12 @@ export class Player {
     /** facing → row na spritesheet de caminhada. */
     static DIR_ROW = [0, 2, 1, 1];
 
-    /** Distância máxima (px) do auxílio de quina. */
-    static CORNER_ASSIST_RANGE = 5;
+    /**
+     * Distância máxima (px) do auxílio de quina. Quanto maior, mais o jogador
+     * "desliza" para dentro de portas/passagens estreitas sem precisar alinhar
+     * pixel a pixel — reduz a sensação de travar na entrada/saída de locais.
+     */
+    static CORNER_ASSIST_RANGE = 9;
 
     constructor(x, y, config = {}) {
         this.x = x;

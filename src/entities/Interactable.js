@@ -31,6 +31,11 @@ export class Interactable {
         this.glowEnabled = config.glow === true;
         this.glowTimer   = 0;
         this.glowColor   = config.glowColor || 'rgba(255, 215, 0, 0.4)';
+
+        // Folga da área de detecção de interação (px por lado). Usado nas portas/
+        // transições para que a intenção de entrar seja reconhecida ao chegar
+        // perto da porta de qualquer direção razoável, sem alinhamento exato.
+        this.detectPad = config.detectPad || 0;
     }
 
     update(dt) {
@@ -44,9 +49,19 @@ export class Interactable {
         };
     }
 
-    /** Ver NPC.getDetectionBox() — mesma ideia: caixa real usada para interação/debug. */
+    /**
+     * Ver NPC.getDetectionBox() — caixa real usada para interação/debug.
+     * Expandida por `detectPad` (folga) e mantida centrada na posição real do
+     * objeto, para portas/transições serem detectadas sem alinhamento exato.
+     */
     getDetectionBox() {
-        return { x: this.x, y: this.y, width: this.width, height: this.height };
+        const p = this.detectPad;
+        return {
+            x: this.x - p,
+            y: this.y - p,
+            width:  this.width  + p * 2,
+            height: this.height + p * 2,
+        };
     }
 
     draw(ctx) {
